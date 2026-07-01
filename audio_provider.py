@@ -2,38 +2,49 @@ import speech_recognition as sr
 import asyncio
 import edge_tts
 import os
-import pygame
+import ctypes
 import time
 
 from config import VOICE_TAG
 
-def speak_text(text):
+# This version introduced two modes: a standard voice for everyday replies
+# and an alternate voice for council/debate sessions.
+# The dual-voice approach was later simplified — both roles now use VOICE_TAG from config.py.
+COUNCIL_VOICE   = "en-SG-WayneNeural"   # High-energy delivery for strategic debates
+STANDARD_VOICE  = VOICE_TAG              # Day-to-day assistant voice
+
+
+def speak_text(text, voice_mode="standard"):
     """
-    Converts text to speech using Microsoft Edge TTS and plays it via pygame.
-    This was the first working audio implementation.
-    Voice is set in config.py under VOICE_TAG.
+    Converts text to speech using edge-tts and plays via Windows native audio.
+    Pass voice_mode="council" to use the alternate council voice.
     """
     if not text or not text.strip():
         return
 
-    output_file = "assistant_speech.mp3"
+    output_file    = os.path.abspath("assistant_speech.mp3")
+    selected_voice = COUNCIL_VOICE if voice_mode == "council" else STANDARD_VOICE
 
     async def generate_speech():
-        communicate = edge_tts.Communicate(text, VOICE_TAG)
+        communicate = edge_tts.Communicate(text, selected_voice)
         await communicate.save(output_file)
 
     try:
         asyncio.run(generate_speech())
 
-        pygame.mixer.init()
-        pygame.mixer.music.load(output_file)
-        pygame.mixer.music.play()
+        ctypes.windll.winmm.mciSendStringW(
+            f'open "{output_file}" type mpegvideo alias assistant_audio', None, 0, 0)
+        ctypes.windll.winmm.mciSendStringW('play assistant_audio', None, 0, 0)
 
-        while pygame.mixer.music.get_busy():
+        status = ctypes.create_unicode_buffer(255)
+        while True:
+            ctypes.windll.winmm.mciSendStringW(
+                'status assistant_audio mode', status, 255, 0)
+            if status.value != 'playing':
+                break
             time.sleep(0.1)
 
-        pygame.mixer.music.unload()
-        pygame.mixer.quit()
+        ctypes.windll.winmm.mciSendStringW('close assistant_audio', None, 0, 0)
 
     except Exception as e:
         print(f"[Audio error: {e}]")
@@ -41,11 +52,11 @@ def speak_text(text):
 
 def listen_to_user():
     """
-    Captures microphone audio and returns it as text.
-    Uses a 3.5-second pause threshold so the speaker is never cut off mid-sentence.
+    Captures microphone audio and returns it as transcribed text.
+    Uses a 3.5-second pause threshold to avoid cutting off long sentences.
     """
     recognizer = sr.Recognizer()
-    recognizer.pause_threshold       = 3.5
+    recognizer.pause_threshold          = 3.5
     recognizer.dynamic_energy_threshold = False
 
     with sr.Microphone() as source:
