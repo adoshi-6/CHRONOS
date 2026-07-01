@@ -7,23 +7,16 @@ import time
 
 from config import VOICE_TAG
 
-# This version introduced two modes: a standard voice for everyday replies
-# and an alternate voice for council/debate sessions.
-# The dual-voice approach was later simplified — both roles now use VOICE_TAG from config.py.
-COUNCIL_VOICE   = "en-SG-WayneNeural"   # High-energy delivery for strategic debates
-STANDARD_VOICE  = VOICE_TAG              # Day-to-day assistant voice
-
-
 def speak_text(text, voice_mode="standard"):
     """
-    Converts text to speech using edge-tts and plays via Windows native audio.
-    Pass voice_mode="council" to use the alternate council voice.
+    Converts text to speech using a single locked voice via edge-tts.
+    Dual-voice mode removed — voice is now set once in config.py.
     """
     if not text or not text.strip():
         return
 
     output_file    = os.path.abspath("assistant_speech.mp3")
-    selected_voice = COUNCIL_VOICE if voice_mode == "council" else STANDARD_VOICE
+    selected_voice = VOICE_TAG
 
     async def generate_speech():
         communicate = edge_tts.Communicate(text, selected_voice)
@@ -53,7 +46,7 @@ def speak_text(text, voice_mode="standard"):
 def listen_to_user():
     """
     Captures microphone audio and returns it as transcribed text.
-    Uses a 3.5-second pause threshold to avoid cutting off long sentences.
+    Uses a 3.5-second pause threshold so the speaker is never cut off.
     """
     recognizer = sr.Recognizer()
     recognizer.pause_threshold          = 3.5
