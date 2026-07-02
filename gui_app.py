@@ -13,12 +13,9 @@ from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_T
 
 class VoiceAssistantGUI:
     """
-    First Tkinter GUI for the voice assistant.
-    Dark HUD theme with teal accents, mic button, and text input.
-
-    Known bug in this version: 'pachy=5' typo on the status label
-    (should be pady=5) and tag_config uses 'fg=' shorthand which
-    Tkinter does not recognise — both fixed in v2.
+    Bug fixes from v1:
+      - 'pachy=5' typo corrected to 'pady=5' on the status label
+      - tag_config changed from 'fg=' to 'foreground=' (correct Tkinter keyword)
     """
     def __init__(self, root):
         self.root = root
@@ -26,12 +23,12 @@ class VoiceAssistantGUI:
         self.root.geometry("700x550")
         self.root.configure(bg="#121212")
 
-        # Status bar — note: 'pachy=5' is a typo, fixed in v2
+        # Fixed: pady=5 (was pachy=5)
         self.status_label = tk.Label(
             root,
-            text=f"SYSTEM STATUS: ONLINE",
+            text="SYSTEM STATUS: ONLINE",
             font=("Consolas", 10, "bold"),
-            bg="#1a1a1a", fg="#00ffcc", anchor="w", pachy=5
+            bg="#1a1a1a", fg="#00ffcc", anchor="w", pady=5
         )
         self.status_label.pack(fill=tk.X, padx=10, pady=(10, 5))
 
@@ -41,12 +38,11 @@ class VoiceAssistantGUI:
         )
         self.log_display.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # Bug: 'fg=' is not the correct Tkinter keyword for tag_config
-        # Should be 'foreground=' — fixed in v2
-        self.log_display.tag_config("sys",  fg="#00ffcc")
-        self.log_display.tag_config("user", fg="#ffcc00")
-        self.log_display.tag_config("ace",  fg="#ffffff")
-        self.log_display.tag_config("err",  fg="#ff3333")
+        # Fixed: foreground= (was fg=)
+        self.log_display.tag_config("sys",  foreground="#00ffcc")
+        self.log_display.tag_config("user", foreground="#ffcc00")
+        self.log_display.tag_config("ace",  foreground="#ffffff")
+        self.log_display.tag_config("err",  foreground="#ff3333")
 
         self.input_frame = tk.Frame(root, bg="#121212")
         self.input_frame.pack(fill=tk.X, padx=10, pady=10)
