@@ -10,12 +10,10 @@ from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_T
 
 app = Flask(__name__)
 
-# In-memory conversation history — cleared on server restart
 chat_history = []
 
 
 def should_trigger_council(text: str) -> bool:
-    """Detects council keywords while respecting negation modifiers."""
     text_lower = text.lower()
     negations  = ["don't", "dont", "do not", "never", "without", "skip", "stop"]
     if not any(kw in text_lower for kw in COUNCIL_TRIGGERS):
@@ -30,15 +28,13 @@ def should_trigger_council(text: str) -> bool:
 
 @app.route('/')
 def serve_index():
-    # Bug in this version: send_from_string does not exist in Flask.
-    # Should be render_template_string or open('index.html').read().
-    # Fixed in v2.
+    # Bug fix: send_from_string does not exist in Flask.
+    # Replaced with a direct file read — simple and reliable.
     try:
-        from flask import send_from_string  # This import will fail at runtime
         with open('index.html', 'r', encoding='utf-8') as f:
-            return send_from_string(f.read(), 'index.html')
+            return f.read()
     except Exception as e:
-        return f"Server error: {e}", 500
+        return f"Could not load index.html: {e}", 500
 
 
 @app.route('/api/command', methods=['POST'])
@@ -67,10 +63,11 @@ def handle_command():
 
     else:
         text_lower = command.lower()
-        if "think deeply" in text_lower or "smart mode" in text_lower or "analyze" in text_lower:
-            active_model = SMART_MODEL
-        else:
-            active_model = FAST_MODEL
+        active_model = SMART_MODEL if (
+            "think deeply" in text_lower or
+            "smart mode"   in text_lower or
+            "analyze"      in text_lower
+        ) else FAST_MODEL
 
         messages = [
             {"role": "system",
