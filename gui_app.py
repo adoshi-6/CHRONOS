@@ -13,10 +13,10 @@ from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_T
 
 class VoiceAssistantGUI:
     """
-    Adds short-term chat memory buffer (self.chat_history).
-    Previous messages are now passed into each Ollama call so the
-    assistant can remember earlier turns within the same session.
-    History is capped at 20 messages to keep context windows manageable.
+    Final Tkinter GUI version — combines all previous fixes with
+    short-term chat history memory. This is the last iteration of the
+    desktop GUI before the project moved to a Flask web server and
+    browser-based frontend.
     """
     def __init__(self, root):
         self.root = root
@@ -24,7 +24,7 @@ class VoiceAssistantGUI:
         self.root.geometry("700x550")
         self.root.configure(bg="#121212")
 
-        # Short-term memory buffer — cleared on restart
+        # Short-term memory — cleared on restart
         self.chat_history = []
 
         self.status_label = tk.Label(
@@ -116,7 +116,7 @@ class VoiceAssistantGUI:
 
     def execute_voice_capture(self):
         self.set_status("Listening...", "#ffcc00")
-        self.append_log("\n[Microphone open: speak now]\n", "sys")
+        self.append_log("\n[Microphone open]\n", "sys")
         spoken_text = listen_to_user()
         if not spoken_text:
             self.set_status("SYSTEM STATUS: READY", "#00ffcc")
@@ -153,7 +153,6 @@ class VoiceAssistantGUI:
                 active_model = FAST_MODEL
                 self.set_status(f"Fast model: {FAST_MODEL}", "#00ffcc")
 
-            # Build message list with system prompt + full chat history
             messages = [
                 {"role": "system",
                  "content": f"You are {ASSISTANT_NAME}, a warm, direct, brief personal assistant."}
@@ -166,11 +165,8 @@ class VoiceAssistantGUI:
                 reply    = response['message']['content']
                 self.append_log(f"{ASSISTANT_NAME}: {reply}\n", "ace")
 
-                # Update memory buffer
                 self.chat_history.append({"role": "user",      "content": command})
                 self.chat_history.append({"role": "assistant",  "content": reply})
-
-                # Cap at 20 messages to avoid context overflow
                 if len(self.chat_history) > 20:
                     self.chat_history = self.chat_history[-20:]
 
