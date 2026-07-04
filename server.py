@@ -27,10 +27,6 @@ def should_trigger_council(text: str) -> bool:
 
 
 def execute_audio_playback(text_to_speak: str):
-    """
-    Runs TTS in a background thread.
-    Initialises Windows COM on the thread if needed.
-    """
     try:
         try:
             import pythoncom
@@ -54,14 +50,15 @@ def serve_index():
 @app.route('/api/command', methods=['POST'])
 def handle_command():
     """
-    Main routing endpoint.
-    Added 'source' field tracking — voice responses trigger TTS,
-    text responses are silent. Council narration also respects source.
+    Refines the system prompt to produce more natural, conversational replies.
+    Previous version was too robotic — this version adds personality while
+    keeping responses brief. 1-2 sentences maximum, no bullet points or
+    preamble unless explicitly asked.
     """
     global chat_history
     data    = request.get_json() or {}
     command = data.get('command', '').strip()
-    source  = data.get('source', 'text')   # 'voice' or 'text'
+    source  = data.get('source', 'text')
 
     if not command:
         return jsonify({"response": "No command received."})
@@ -71,7 +68,6 @@ def handle_command():
     if should_trigger_council(command):
         debate_packet = run_council_debate(command)
 
-        # Only narrate council over voice — text source stays silent
         if source == 'voice':
             def narrate():
                 execute_audio_playback("Contrarian analysis.")
@@ -96,10 +92,14 @@ def handle_command():
 
         print(f"[Model: {active_model}]")
 
+        # Refined system prompt — natural, warm, and brief
         messages = [
             {"role": "system", "content": (
-                f"You are {ASSISTANT_NAME}, a warm, direct, brief personal assistant. "
-                f"Keep responses to 1 or 2 sentences. No filler."
+                f"You are {ASSISTANT_NAME}, an intelligent personal assistant. "
+                f"Speak naturally and conversationally — warm but direct, like a trusted friend. "
+                f"Keep every response to 1 or 2 sentences maximum. "
+                f"No bullet points, no preamble, no filler phrases. "
+                f"Get straight to the answer."
             )}
         ]
         messages.extend(chat_history)
