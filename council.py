@@ -1,83 +1,110 @@
 import ollama
+import re
 
 from config import SMART_MODEL
 
-# Bug fix: v1 returned a plain string (the Chairman's verdict only).
-# This caused KeyError crashes whenever callers did debate_packet['contrarian'].
-# v2 returns a full dict so all three agent verdicts are accessible.
 LOCAL_MODEL = SMART_MODEL
+
+
+def _chat(system: str, user: str) -> str:
+    """Single model call. Strips reasoning blocks from thinking models."""
+    try:
+        response = ollama.chat(
+            model=LOCAL_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ]
+        )
+        raw = response['message']['content']
+        return re.sub(r'<think>[\s\S]*?</think>', '', raw).strip()
+    except Exception as e:
+        return f"[Agent unavailable: {e}]"
 
 
 def run_council_debate(user_idea: str) -> dict:
     """
-    Runs a 3-agent strategic debate on the user's idea.
+    Full 6-seat council debate.
 
-    Returns a dict with keys:
-        contrarian  — risks and flaws identified
-        synergist   — re-engineered strategy
-        chairman    — final synthesized verdict
+    Expanded from 3 agents (Contrarian, Synergist, Chairman) to 6:
+      1. Contrarian       — risks and flaws
+      2. First Principles — rebuild from axioms
+      3. Expansionist     — hidden upside and scale
+      4. Outsider         — objective, no jargon
+      5. Executor         — one concrete next action
+      6. Chairman         — synthesises all five
 
-    Bug fix from v1: now returns a dict instead of a plain string.
+    Returns a dict with all six agent keys.
     """
     print("\n==================================================")
-    print("  Council Chamber Active")
+    print("  Council Chamber Active — 6 Agents")
     print("==================================================")
 
-    # Phase 1: The Contrarian
-    print("\n[1/3] The Contrarian...")
-    prompt_contrarian = (
-        f"You are 'The Contrarian', a ruthless risk analyst. "
-        f"Point out the fatal flaws, vulnerabilities, and hidden dangers "
-        f"in this idea. Be brief, direct, and devastating.\n\nIdea: {user_idea}"
+    print("[1/6] Contrarian...")
+    text1 = _chat(
+        "You are The Contrarian. Identify every risk, flaw, and reason this will fail. "
+        "Be direct. Maximum 2 sentences.",
+        f"Identify vulnerabilities: {user_idea}"
     )
-    try:
-        response           = ollama.chat(model=LOCAL_MODEL,
-                                         messages=[{"role": "user", "content": prompt_contrarian}])
-        contrarian_verdict = response['message']['content']
-        print("  done.")
-    except Exception as e:
-        contrarian_verdict = f"[Contrarian failed: {e}]"
+    print("  done.")
 
-    # Phase 2: The Synergist
-    print("[2/3] The Synergist...")
-    prompt_synergist = (
-        f"You are 'The Synergist', a venture strategist. "
-        f"Review this proposal: '{user_idea}' and the flaws exposed: "
-        f"'{contrarian_verdict}'. Re-engineer the strategy to eliminate those flaws "
-        f"and scale up the blueprint value. Keep it concise."
+    print("[2/6] First Principles Thinker...")
+    text2 = _chat(
+        "You are the First Principles Thinker. Strip all assumptions. "
+        "Rebuild the core logic from raw axioms. Maximum 2 sentences.",
+        f"Deconstruct and rebuild: {user_idea}"
     )
-    try:
-        response          = ollama.chat(model=LOCAL_MODEL,
-                                        messages=[{"role": "user", "content": prompt_synergist}])
-        synergist_verdict = response['message']['content']
-        print("  done.")
-    except Exception as e:
-        synergist_verdict = f"[Synergist failed: {e}]"
+    print("  done.")
 
-    # Phase 3: The Chairman
-    print("[3/3] The Chairman...")
-    prompt_chairman = (
-        f"You are 'The Chairman'. Deliver the final master summary and explicit "
-        f"takeaways based on the debate.\n"
-        f"Original proposal: '{user_idea}'\n"
-        f"Contrarian risks: '{contrarian_verdict}'\n"
-        f"Synergist optimizations: '{synergist_verdict}'\n\n"
-        f"Synthesize into an authoritative final review in 3 to 4 sentences."
+    print("[3/6] Expansionist...")
+    text3 = _chat(
+        "You are The Expansionist. Uncover hidden upside, scale plays, "
+        "and opportunities being missed. Maximum 2 sentences.",
+        f"Maximize scale and upside: {user_idea}"
     )
-    try:
-        response         = ollama.chat(model=LOCAL_MODEL,
-                                       messages=[{"role": "user", "content": prompt_chairman}])
-        chairman_verdict = response['message']['content']
-        print("  done.")
-    except Exception as e:
-        chairman_verdict = f"[Chairman failed: {e}]"
+    print("  done.")
+
+    print("[4/6] Outsider...")
+    text4 = _chat(
+        "You are The Outsider. Evaluate with complete objectivity and zero jargon. "
+        "Maximum 2 sentences.",
+        f"Evaluate neutrally: {user_idea}"
+    )
+    print("  done.")
+
+    print("[5/6] Executor...")
+    text5 = _chat(
+        "You are The Executor. Focus only on what to do next. "
+        "Give one concrete, actionable next step. Maximum 2 sentences.",
+        f"What is the immediate next action? {user_idea}"
+    )
+    print("  done.")
+
+    print("[6/6] Chairman...")
+    chairman_context = (
+        f"Objective: {user_idea}\n\n"
+        f"Contrarian: {text1}\n\n"
+        f"First Principles: {text2}\n\n"
+        f"Expansionist: {text3}\n\n"
+        f"Outsider: {text4}\n\n"
+        f"Executor: {text5}"
+    )
+    text6 = _chat(
+        "You are The Chairman. Read all five agent briefs and deliver one clear, "
+        "unified recommendation — the single best path forward. Maximum 3 sentences.",
+        chairman_context
+    )
+    print("  done.")
 
     print("\n==================================================")
     print("  Debate complete.")
     print("==================================================\n")
 
     return {
-        "contrarian": contrarian_verdict,
-        "synergist":  synergist_verdict,
-        "chairman":   chairman_verdict,
+        "contrarian":       text1,
+        "first_principles": text2,
+        "expansionist":     text3,
+        "outsider":         text4,
+        "executor":         text5,
+        "chairman":         text6,
     }
