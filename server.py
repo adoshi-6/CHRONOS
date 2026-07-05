@@ -1,4 +1,6 @@
-from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, DESKTOP_PATH, COUNCIL_TRIGGERS
+from config import (ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL,
+                   DESKTOP_PATH, COUNCIL_TRIGGERS, CODE_WORDS,
+                   PROTECTED_ACTIONS, UNLOCK_PHRASES, PIN_LENGTH)
 from flask import Flask, request, jsonify
 import hashlib
 import pyautogui   # keyboard and mouse control for desktop typing
@@ -48,13 +50,7 @@ SECURITY_DIR      = "ace_security"
 PIN_FILE          = os.path.join(SECURITY_DIR, "pin.json")
 os.makedirs(SECURITY_DIR, exist_ok=True)
 
-# Actions that always require a PIN before running
-PROTECTED_ACTIONS = [
-    "send_message", "delete_data", "change_setting",
-    "first_time_access", "write_file", "store_password",
-    "code_black", "safe_mode", "focus_mode", "stealth_mode",
-    "factory_reset", "briefing",
-]
+# PROTECTED_ACTIONS loaded from config.py
 
 # Current active mode — changes via code words
 # Modes: "normal", "safe", "focus", "stealth"
@@ -391,22 +387,8 @@ def execute_audio_playback(text: str):
 # SECURITY — CODE WORD DETECTION
 # 
 
-CODE_WORDS = {
-    # phrase to detect          : (internal action key, description shown to user)
-    "code black":    ("code_black",    "shut down everything immediately — server, audio, browser tab"),
-    "safe mode":     ("safe_mode",     "switch to Safe Mode — chat only, no internet or desktop access"),
-    "focus mode":    ("focus_mode",    "switch to Focus Mode — all proactive interruptions blocked"),
-    "stealth mode":  ("stealth_mode",  "switch to Stealth Mode — no audio output, text only"),
-    "briefing":      ("briefing",      "run a full briefing of everything since your last session"),
-    "factory reset": ("factory_reset", "wipe ALL memory — lessons, mistakes, corrections, session history"),
-    "stand down":    ("stand_down",    "pause all background activity but stay online"),
-    "ghost mode":    ("ghost_mode",    "stop logging anything this session — no memory written"),
-    "purge":         ("purge",         "wipe this session only, keep long-term memory"),
-    "lockdown":      ("lockdown",      "stop accepting input from anyone until you say the unlock phrase"),
-    "red alert":     ("red_alert",     "every action requires confirmation regardless of type"),
-    "handoff":       ("handoff",       "save a full session summary to your desktop then shut down"),
-    "debrief":       ("debrief",       "tell you everything Ace did since you last checked in"),
-}
+# CODE_WORDS, PROTECTED_ACTIONS, and UNLOCK_PHRASES are defined in config.py.
+# Edit config.py to customise your code words, protected actions, and unlock phrases.
 
 def detect_code_word(text: str) -> tuple[str, str] | None:
     """Returns (action_key, description) if a code word is found, else None."""
@@ -1068,7 +1050,7 @@ def orchestrate_command_routing():
 
     #  Lockdown mode — ignore everyone 
     if ACE_MODE == "lockdown":
-        unlock_phrases = ["aryan", "unlock", "i am aryan", "this is aryan"]
+        unlock_phrases = UNLOCK_PHRASES
         if not any(p in lower_cmd for p in unlock_phrases):
             return respond("Lockdown active. Not responding.", speak=False)
         else:
