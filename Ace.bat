@@ -9,7 +9,7 @@ echo  ================================================
 echo.
 
 :: ── EDIT THIS PATH to wherever your ace folder lives ──
-set ACE_DIR=C:\Users\Aryan\OneDrive\Desktop\ace
+set ACE_DIR=C:\Users\Aryan\OneDrive\Desktop\ace_assistant
 
 cd /d "%ACE_DIR%"
 if errorlevel 1 (
