@@ -425,7 +425,7 @@
     <div id="response-stack">
         <div class="response-card" id="welcome-card">
             <div class="speaker-tag">${ASSISTANT_NAME}</div>
-            Online and ready, ${USER_NAME}. Say "hey ${assistantKey}" to start talking, or type below.
+            Online and ready, ${USER_NAME}. Say "hey ${ASSISTANT_NAME.toLowerCase()}" to start talking, or type below.
         </div>
     </div>
 
@@ -470,7 +470,7 @@
                 <div class="pulse-ring"></div>
             </div>
         </div>
-        <div class="hint-text">SAY "hey ${assistantKey}" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
+        <div class="hint-text">SAY "hey ${ASSISTANT_NAME.toLowerCase()}" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
     </div>
 
     <script src="/three.min.js"></script>

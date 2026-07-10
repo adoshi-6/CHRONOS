@@ -1108,7 +1108,12 @@ def health_check():
 def serve_dashboard_console():
     try:
         with open('index.html', 'r', encoding='utf-8') as f:
-            return f.read()
+            html = f.read()
+        # Dynamically inject config variables into frontend HTML template
+        html = html.replace("${USER_NAME}", USER_NAME)
+        html = html.replace("${ASSISTANT_NAME}", ASSISTANT_NAME)
+        html = html.replace("${ASSISTANT_NAME.toLowerCase()}", ASSISTANT_NAME.lower())
+        return html
     except Exception as e:
         return f"Dashboard load failure: {e}"
 
