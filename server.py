@@ -1202,7 +1202,7 @@ def orchestrate_command_routing():
         return respond(reply, speak=True)
 
     #  Voice control 
-    if any(x in lower_cmd for x in ["turn microphone off", "microphone off", "voice mode off", "deactivate voice"]):
+    if any(x in lower_cmd for x in ["turn microphone off", "microphone off", "voice mode off", "deactivate voice", "turn off voice mode", "turn off the microphone"]):
         reply = f"Entering standby. Say '{WAKE_WORD}' or 'activate voice mode' when you need me."
         return respond(reply, rtype="shutdown", speak=True)
 

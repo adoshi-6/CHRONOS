@@ -24,6 +24,9 @@ def speak_text(text, voice_mode="standard"):
     if not text or not text.strip():
         return
 
+    # Prepend a small pause to let the audio hardware wake up without truncating the first words
+    text = "... " + text.lstrip('. ')
+
     output_file = os.path.abspath("ace_speech.mp3")
     from config import VOICE_TAG
     selected_voice = VOICE_TAG
