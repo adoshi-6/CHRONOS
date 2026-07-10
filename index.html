@@ -838,12 +838,15 @@
         function postCommandToBackend(payloadText, source) {
             isServerProcessing = true;
             updateSystemUIState("processing");
-            let displayPayload = payloadText;
-            if (typeof displayPayload === 'string') {
-                const regex = new RegExp("\\b" + ASSISTANT_NAME + "\\b", 'gi');
-                displayPayload = displayPayload.replace(regex, ASSISTANT_NAME.toUpperCase());
+            if (typeof payloadText === 'string') {
+                const pattern = ASSISTANT_NAME.toLowerCase() === 'chronos'
+                    ? "\\b(chronos|kronos)\\b"
+                    : "\\b" + ASSISTANT_NAME + "\\b";
+                const regex = new RegExp(pattern, 'gi');
+                payloadText = payloadText.replace(regex, ASSISTANT_NAME.toUpperCase());
             }
-            appendResponseCard(source === 'voice' ? "${USER_NAME} (Voice)" : "${USER_NAME} (Keyboard)", displayPayload);
+            let displayPayload = payloadText;
+            appendResponseCard(source === 'voice' ? `${USER_NAME} (Voice)` : `${USER_NAME} (Keyboard)`, displayPayload);
 
             document.getElementById('scout-status').innerText = "THINKING";
             document.getElementById('scout-entry').innerText = "Routing transaction package across local array nodes...";
@@ -1026,6 +1029,7 @@
                         const stack = document.getElementById('response-stack');
                         const card = document.createElement('div');
                         card.className = 'response-card';
+                        const cleanMetricsText = `System Health Check\nCPU: ${m.cpu}\nRAM: ${m.ram}\nDisk: ${m.disk}\nBattery: ${m.battery}\nHeaviest processes: ${(m.top_procs || []).join(', ')}\nStartup programs: ${startupList}\n\n${data.response}`;
                         card.innerHTML = `
                             <div class="speaker-tag">System Health Check</div>
                             <div style="font-family: monospace; font-size: 11px; line-height: 1.9; margin-top: 8px;">
@@ -1039,7 +1043,8 @@
                             <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
                                 ${data.response}
                             </div>
-                            <div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace;">LATENCY: ${data.execution_time}s</div>`;
+                            <div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace;">LATENCY: ${data.execution_time}s</div>
+                            <button class="copy-btn" onclick="copyCardText(this, ${JSON.stringify(cleanMetricsText)})">COPY</button>`;
                         stack.appendChild(card);
                         stack.scrollTop = stack.scrollHeight;
                     } else if (data.type === 'coding' || data.type === 'browser' || data.type === 'desktop') {
@@ -1053,7 +1058,8 @@
                             desktop: `Desktop Agent`,
                         };
                         let tagLabel = labelMap[data.type] || data.model;
-                        card.innerHTML = `<div class="speaker-tag">${tagLabel}</div><div>${cleanText}</div><div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace; letter-spacing: 0.05em;">LATENCY: ${data.execution_time}s</div>`;
+                        const cleanCodeText = data.response.replace(/```[a-z]*\n?/g, '');
+                        card.innerHTML = `<div class="speaker-tag">${tagLabel}</div><div>${cleanText}</div><div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace; letter-spacing: 0.05em;">LATENCY: ${data.execution_time}s</div><button class="copy-btn" onclick="copyCardText(this, ${JSON.stringify(cleanCodeText)})">COPY</button>`;
                         stack.appendChild(card);
                         stack.scrollTop = stack.scrollHeight;
                     } else {
@@ -1226,7 +1232,7 @@
             }
 
             const plainText = (typeof message === 'string')
-                ? message.replace(/<[^>]*>/g, '')
+                ? message.replace(/<[^>]*>/g, '').replace(/```[a-z]*\n?/g, '')
                 : JSON.stringify(message);
 
             card.innerHTML = `

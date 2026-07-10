@@ -719,6 +719,54 @@ def _run_agent(seat_name: str, idea: str) -> tuple[str, str]:
     return seat_name, result
 
 
+def classify_command_route(command: str) -> str:
+    """
+    Uses the fast LLM to classify the user's intent dynamically.
+    Returns one of the routing keys:
+    'council', 'browser', 'system_monitor', 'desktop', 'coding', 'session_end',
+    'news_briefing', 'self_modification', 'correction', 'conversational'
+    """
+    system_prompt = (
+        f"You are {ASSISTANT_NAME}'s routing orchestrator. Classify the user's command into exactly one of these categories:\n"
+        "- 'council': User explicitly wants a boardroom/council debate, or asks to consult/assemble the council.\n"
+        "- 'browser': User wants to search the web, get live info, look up online news, or check current prices.\n"
+        "- 'system_monitor': User asks about system performance, CPU/RAM/disk/battery usage, running processes, lagging, or PC health.\n"
+        "- 'desktop': User wants to open, launch, or close a local application/file, create/delete files/folders, or control their desktop.\n"
+        "- 'coding': User asks for script compilation, writing programming code, debugging, or coding refactors.\n"
+        "- 'session_end': User is ending the session or closing out (e.g., 'wrap it up', 'end session', 'done for today', 'good night').\n"
+        "- 'news_briefing': User explicitly requests a morning news briefing or daily news headlines summary.\n"
+        "- 'self_modification': User wants you to change how you behave, modify your behavior/rules, or learn a rule for the future.\n"
+        "- 'correction': User is explicitly telling you that your previous response was wrong, mistaken, or incorrect.\n"
+        "- 'conversational': General discussion, questions, chatting, math, or anything else that doesn't need external system/browser tools.\n"
+        "\n"
+        "Analyze the meaning and context of the command carefully. Negations or counter-factuals (e.g. 'do not search') must prevent classification into that tool.\n"
+        "Respond with ONLY the category string itself (e.g. 'conversational'), no extra words, formatting, or punctuation."
+    )
+    try:
+        reply = ollama_call(FAST_MODEL, system_prompt, f"User command: {command}")
+        route = reply.strip().lower().replace("'", "").replace('"', "")
+        
+        # Keyword-to-route synonym mapping to make classification robust
+        route_mapping = {
+            'browser': ['browser', 'web', 'internet', 'search', 'google', 'duckduckgo', 'lookup', 'online'],
+            'desktop': ['desktop', 'application', 'app', 'launch', 'open', 'close', 'run', 'local', 'file', 'folder', 'cmd', 'command'],
+            'system_monitor': ['system_monitor', 'system', 'monitor', 'cpu', 'ram', 'performance', 'health', 'battery', 'metrics'],
+            'coding': ['coding', 'code', 'script', 'compile', 'debug', 'programming', 'develop'],
+            'council': ['council', 'debate', 'boardroom', 'consult'],
+            'session_end': ['session_end', 'end', 'wrap', 'close', 'exit', 'bye', 'goodnight'],
+            'news_briefing': ['news_briefing', 'briefing', 'headlines'],
+            'self_modification': ['self_modification', 'modify', 'behavior', 'learn', 'rule'],
+            'correction': ['correction', 'correct', 'wrong', 'mistake', 'incorrect']
+        }
+        for r, keywords in route_mapping.items():
+            if any(k in route for k in keywords):
+                return r
+        return 'conversational'
+    except Exception as e:
+        print(f"?? [Routing classification error]: {e}")
+        return 'conversational'
+
+
 def run_parallel_council(idea: str) -> dict:
     """
     Fire all 5 agents simultaneously using the shared thread pool.
@@ -1401,6 +1449,7 @@ def orchestrate_command_routing():
         lessons_ctx = build_lessons_context()
         chat_system = (
             f"You are {ASSISTANT_NAME}, {USER_NAME}'s personal AI assistant. "
+            "You have full capabilities to search the internet/web (via the browser harness) and execute commands/open applications on the user's desktop. Never claim that you cannot access the internet, browse the web, or control the desktop. "
             "Never use emojis. Never start with filler phrases like Certainly or Great question. "
             "Speak like a sharp, trusted friend — warm, plain-spoken, and brief. "
             f"Keep responses to 1 or 2 sentences unless {USER_NAME} asks for more detail. "
@@ -1440,4 +1489,3 @@ if __name__ == '__main__':
 @app.route('/api/is_speaking', methods=['GET'])
 def api_is_speaking():
     return jsonify({"speaking": is_speaking()})
-
