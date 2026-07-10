@@ -862,7 +862,7 @@ def execute_browser_harness(user_query: str) -> str:
 
     target_url = (
         target_search if target_search.startswith("http")
-        else f"https://html.duckduckgo.com/html/?q={target_search.replace(' ', '+')}"
+        else f"https://www.bing.com/search?q={target_search.replace(' ', '+')}"
     )
 
     try:
@@ -876,7 +876,7 @@ def execute_browser_harness(user_query: str) -> str:
             page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             print(f"  Navigating -> {target_url}")
             page.goto(target_url, timeout=BROWSER_TIMEOUT * 1000)
-            page.wait_for_load_state("domcontentloaded")
+            page.wait_for_load_state("networkidle")
             raw_text    = page.inner_text("body")
             clean_lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
             # Take first 60 lines — more context for better synthesis
