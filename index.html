@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chronos — Personal Assistant</title>
+    <title>AI Voice Assistant</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body, html { 
@@ -720,13 +720,15 @@
                     return;
                 }
 
-                // Check if the user referred to the assistant (with phonetic spelling variations)
+                // Check if the user referred to the assistant
                 const nameKey = ASSISTANT_NAME.toLowerCase();
                 const wakePhrases = [
-                    `hey ${nameKey}`, `hi ${nameKey}`, `ok ${nameKey}`, `okay ${nameKey}`, nameKey,
-                    "hey chronos", "hi chronos", "ok chronos", "okay chronos", "chronos",
-                    "hey kronos", "hi kronos", "ok kronos", "okay kronos", "kronos"
+                    `hey ${nameKey}`, `hi ${nameKey}`, `ok ${nameKey}`, `okay ${nameKey}`, nameKey
                 ];
+                // Support phonetic 'k' variant if configured name is 'chronos'
+                if (nameKey === 'chronos') {
+                    wakePhrases.push("hey kronos", "hi kronos", "ok kronos", "okay kronos", "kronos");
+                }
                 
                 let matchedWake = "";
                 for (let w of wakePhrases) {
@@ -1053,7 +1055,7 @@
             }
         }
 
-        // Polls /api/is_speaking and re-arms the mic the moment Chronos
+        // Polls /api/is_speaking and re-arms the mic the moment the assistant
         // finishes talking. Shared by normal replies and the wake-word ping,
         // so the mic never stays muted longer than the audio actually plays.
         function resumeListeningWhenDoneSpeaking() {
