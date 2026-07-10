@@ -121,12 +121,21 @@
             box-shadow: 0 0 24px rgba(45, 212, 168, 0.5);
         }
         .mic-button.active svg { fill: var(--accent-glow, #2DD4A8); }
+        .mic-button.standby {
+            border-color: #3b82f6;
+            box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
+        }
+        .mic-button.standby svg { fill: #3b82f6; }
         .pulse-ring {
             position: absolute; top: 0; left: 0; width: 64px; height: 64px;
             border-radius: 50%; border: 2px solid var(--accent-glow, #2DD4A8); pointer-events: none;
             opacity: 0; transform: scale(1); border-color: var(--accent-glow, #2DD4A8);
         }
         .mic-button.active + .pulse-ring { animation: ringSpread 1.4s infinite cubic-bezier(0.16, 1, 0.3, 1); }
+        .mic-button.standby + .pulse-ring {
+            border-color: #3b82f6;
+            animation: ringSpread 2.2s infinite cubic-bezier(0.16, 1, 0.3, 1);
+        }
 
         .hint-text { font-size: 11px; font-family: monospace; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 0.08em; }
 
@@ -736,10 +745,11 @@
                 command = command.replace(/^[.,\s!?]+|[.,\s!?]+$/g, "").trim();
                 const commandLower = command.toLowerCase();
 
-                // Check for voice shutdown commands (only if it matches the complete isolated command)
+                // Check for voice standby/shutdown commands (only if it matches the complete isolated command)
                 const voiceOffCommands = [
                     "turn off voice mode", "turn off the microphone", "microphone off", 
-                    "voice mode off", "deactivate voice", "text mode only", "turn microphone off"
+                    "voice mode off", "deactivate voice", "text mode only", "turn microphone off",
+                    "standby", "go to standby", "wait", "hold on"
                 ];
 
                 if (voiceOffCommands.includes(commandLower)) {
@@ -751,6 +761,8 @@
                 if (isListeningMode) {
                     postCommandToBackend(transcript, 'voice');
                 } else if (matchedWake) {
+                    // Activate active listening for a flowing conversation!
+                    switchToActiveListeningMode();
                     // If they just said the wake word with nothing else, trigger the ping response
                     if (!command) {
                         speakWakePing();
@@ -763,7 +775,10 @@
             recognition.onerror = (e) => { console.warn("⚠️ [Voice Core] Tracking exception state ignored."); };
             recognition.onend = () => { if (shouldRunSpeechEngine && !isServerProcessing) { try { recognition.start(); } catch(err) {} } };
 
-            if (shouldRunSpeechEngine) { try { recognition.start(); } catch(e) {} }
+            if (shouldRunSpeechEngine) {
+                try { recognition.start(); } catch(e) {}
+                if (!isListeningMode) switchToAmbientMode();
+            }
         }
 
         function switchToActiveListeningMode() {
@@ -773,7 +788,10 @@
             if (recognition) { try { recognition.start(); } catch(e) {} }
             const btn = document.getElementById('master-mic-btn');
             const svgIcon = document.getElementById('mic-icon-svg');
-            if (btn) btn.classList.add('active');
+            if (btn) {
+                btn.classList.remove('standby');
+                btn.classList.add('active');
+            }
             updateSystemUIState("listening");
             if (svgIcon) svgIcon.innerHTML = `<rect x="6" y="6" width="12" height="12"/>`;
         }
@@ -784,7 +802,10 @@
             if (recognition) { try { recognition.start(); } catch(e) {} }
             const btn = document.getElementById('master-mic-btn');
             const svgIcon = document.getElementById('mic-icon-svg');
-            if (btn) btn.classList.remove('active');
+            if (btn) {
+                btn.classList.remove('active');
+                btn.classList.add('standby');
+            }
             updateSystemUIState("idle");
             if (svgIcon) svgIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>`;
         }
