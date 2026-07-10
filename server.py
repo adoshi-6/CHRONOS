@@ -977,7 +977,7 @@ def handle_desktop_command(command: str) -> str:
                 subprocess.Popen(f"start {app_name}", shell=True)
                 return f"Launched {app_name}."
             except Exception as e:
-                return f"Could not launch {app_name}: {e}""
+                return f"Could not launch {app_name}: {e}"
 
     # --- List desktop files ---
     if any(kw in lower for kw in ["list files", "show files", "what's on my desktop", "files on desktop"]):
