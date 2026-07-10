@@ -747,6 +747,21 @@ def classify_command_route(command: str) -> str:
     if any(r in lower for r in council_rules):
         return "council"
 
+    # Pre-classify conversational queries to bypass LLM routing overhead
+    action_keywords = [
+        "open", "launch", "start", "run", "close", "kill",
+        "search", "google", "look up", "lookup", "browse", "find",
+        "monitor", "system", "performance", "cpu", "ram", "disk", "battery", "pc", "health", "report",
+        "council", "debate", "boardroom",
+        "news", "headlines", "briefing",
+        "modify", "teach", "learn", "rule",
+        "wrong", "mistake", "correction", "incorrect",
+        "wrap", "bye", "exit", "shutdown", "pin", "security",
+        "code", "coding", "program", "script", "develop", "bug"
+    ]
+    if not any(k in lower for k in action_keywords):
+        return 'conversational'
+
     # --- Simplified LLM orchestrator classifier ---
     system_prompt = (
         "Classify the user command into exactly one category:\n"
