@@ -37,9 +37,9 @@ timeout /t 1 /nobreak >nul
 curl -s http://localhost:5000 >nul 2>&1
 if errorlevel 1 goto WAITLOOP
 
-:: Open the dashboard in the default browser
+:: Open the dashboard in Google Chrome
 echo Opening dashboard in your browser...
-start "" "http://localhost:5000"
+start chrome "http://localhost:5000"
 
 echo.
 echo  Assistant is running. Close this window to shut it down.

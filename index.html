@@ -743,9 +743,12 @@
                         command = transcript;
                     }
 
-                    // If they just said "Hey Chronos" with nothing else, trigger a greeting response
+                    // If they just said "Chronos" / "Hey Chronos" with nothing else,
+                    // give an instant local ping instead of sending it to the LLM.
+                    // This is a straight TTS call — no server routing, no chat history entry.
                     if (!command) {
-                        command = "hey " + assistantKey;
+                        speakWakePing();
+                        return;
                     }
 
                     postCommandToBackend(command, 'voice');
@@ -1043,26 +1046,56 @@
                 if (isListeningMode) switchToActiveListeningMode();
                 else switchToAmbientMode();
 
-                if (shouldRunSpeechEngine) {
-                    const checkAudioState = async () => {
-                        if (isServerProcessing) return; // Wait for server to finish first
-                        try {
-                            const res = await fetch('/api/is_speaking');
-                            const data = await res.json();
-                            if (data.speaking) {
-                                setTimeout(checkAudioState, 500); // Check again in 500ms
-                            } else {
-                                if (shouldRunSpeechEngine) {
-                                    try { recognition.start(); } catch(e) {}
-                                }
-                            }
-                        } catch (e) {
-                            setTimeout(checkAudioState, 1000);
-                        }
-                    };
-                    setTimeout(checkAudioState, 500); 
-                }
+                resumeListeningWhenDoneSpeaking();
             }
+        }
+
+        // Polls /api/is_speaking and re-arms the mic the moment Chronos
+        // finishes talking. Shared by normal replies and the wake-word ping,
+        // so the mic never stays muted longer than the audio actually plays.
+        function resumeListeningWhenDoneSpeaking() {
+            if (!shouldRunSpeechEngine) return;
+            let failedAttempts = 0;
+            const checkAudioState = async () => {
+                if (isServerProcessing) return; // Wait for server to finish first
+                try {
+                    const res = await fetch('/api/is_speaking');
+                    const data = await res.json();
+                    failedAttempts = 0;
+                    if (data.speaking) {
+                        setTimeout(checkAudioState, 500); // Check again in 500ms
+                    } else if (shouldRunSpeechEngine) {
+                        try { recognition.start(); } catch(e) {}
+                    }
+                } catch (e) {
+                    // Route unreachable — don't retry forever in silence; re-arm
+                    // the mic after a couple of misses so voice mode can't get stuck.
+                    failedAttempts++;
+                    if (failedAttempts >= 3) {
+                        if (shouldRunSpeechEngine) { try { recognition.start(); } catch(e2) {} }
+                        return;
+                    }
+                    setTimeout(checkAudioState, 1000);
+                }
+            };
+            setTimeout(checkAudioState, 500);
+        }
+
+        // Instant local acknowledgement when only the wake word is spoken —
+        // no backend/LLM round trip, just a TTS ping so you know it's ready.
+        async function speakWakePing() {
+            isServerProcessing = false;
+            if (recognition) { try { recognition.stop(); } catch(e) {} }
+            updateSystemUIState("muted");
+            try {
+                await fetch('/api/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: "Yes, sir?" })
+                });
+            } catch (e) { /* audio pipeline offline — mic will still re-arm below */ }
+            if (isListeningMode) updateSystemUIState("listening");
+            resumeListeningWhenDoneSpeaking();
         }
 
         function closeCouncilOverlay() {
