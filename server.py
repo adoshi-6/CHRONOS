@@ -7,6 +7,9 @@ import hashlib
 import pyautogui   # keyboard and mouse control for desktop typing
 import os
 import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 import threading
 import time
 import ollama
