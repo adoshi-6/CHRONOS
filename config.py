@@ -14,6 +14,9 @@ ASSISTANT_NAME = "Jarvis"
 # The name the assistant uses to address you.
 USER_NAME = "User"
 
+# The default background color of the UI dashboard
+BACKGROUND_COLOR = "#0E0F13"
+
 
 # ── AI Models ─────────────────────────────────────────────────
 # These must be pulled in Ollama before running.

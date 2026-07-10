@@ -1,7 +1,7 @@
 from config import (ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL,
                    DESKTOP_PATH, COUNCIL_TRIGGERS, CODE_WORDS,
                    PROTECTED_ACTIONS, UNLOCK_PHRASES, PIN_LENGTH,
-                   VOICE_TAG, WAKE_WORD)
+                   VOICE_TAG, WAKE_WORD, BACKGROUND_COLOR)
 from flask import Flask, request, jsonify
 import hashlib
 import pyautogui   # keyboard and mouse control for desktop typing
@@ -1113,6 +1113,7 @@ def serve_dashboard_console():
         html = html.replace("${USER_NAME}", USER_NAME)
         html = html.replace("${ASSISTANT_NAME}", ASSISTANT_NAME)
         html = html.replace("${ASSISTANT_NAME.toLowerCase()}", ASSISTANT_NAME.lower())
+        html = html.replace("${BACKGROUND_COLOR}", BACKGROUND_COLOR)
         return html
     except Exception as e:
         return f"Dashboard load failure: {e}"
