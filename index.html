@@ -168,7 +168,7 @@
             width: 520px; height: 520px;
         }
 
-        /* The five outer agent orbs */
+        /* The six outer agent orbs */
         .agent-orb {
             position: absolute;
             width: 88px; height: 88px;
@@ -332,7 +332,7 @@
 
     <!-- COUNCIL ORB OVERLAY -->
     <div id="council-overlay">
-        <div id="council-title">Council Chamber — Parallel Deliberation Active</div>
+        <div id="council-title">Council Chamber — 6-Agent Parallel Deliberation Active</div>
 
         <div id="council-arena">
             <!-- SVG lines from Chairman to each agent -->
@@ -342,9 +342,10 @@
                 <line id="line-expansionist"    class="council-line" style="--line-color:#34C759"/>
                 <line id="line-outsider"        class="council-line" style="--line-color:#5AC8FA"/>
                 <line id="line-executor"        class="council-line" style="--line-color:#AF52DE"/>
+                <line id="line-rainmaker"       class="council-line" style="--line-color:#FFD700"/>
             </svg>
 
-            <!-- The five agent orbs — positioned in a pentagon around Chairman -->
+            <!-- The six agent orbs — positioned in a hexagon around Chairman -->
             <div class="agent-orb" id="orb-contrarian"
                 style="--orb-light:#FF6B64;--orb-dark:#8B1A15;--orb-border:#FF453A;--orb-glow:rgba(255,69,58,0.5);--orb-glow-far:rgba(255,69,58,0.15);
                 top:14px; left:50%; transform:translateX(-50%);">
@@ -356,7 +357,7 @@
 
             <div class="agent-orb" id="orb-first_principles"
                 style="--orb-light:#FFB340;--orb-dark:#7A4200;--orb-border:#FF9500;--orb-glow:rgba(255,149,0,0.5);--orb-glow-far:rgba(255,149,0,0.15);
-                top:148px; right:18px;">
+                top:120px; right:10px;">
                 <div class="agent-orb-inner">
                     <span class="agent-orb-icon">∅</span>
                 </div>
@@ -365,7 +366,7 @@
 
             <div class="agent-orb" id="orb-expansionist"
                 style="--orb-light:#6EE89A;--orb-dark:#0C5C2A;--orb-border:#34C759;--orb-glow:rgba(52,199,89,0.5);--orb-glow-far:rgba(52,199,89,0.15);
-                bottom:78px; right:68px;">
+                bottom:50px; right:10px;">
                 <div class="agent-orb-inner">
                     <span class="agent-orb-icon">↑</span>
                 </div>
@@ -374,7 +375,7 @@
 
             <div class="agent-orb" id="orb-outsider"
                 style="--orb-light:#7FD9FA;--orb-dark:#0A4A6E;--orb-border:#5AC8FA;--orb-glow:rgba(90,200,250,0.5);--orb-glow-far:rgba(90,200,250,0.15);
-                bottom:78px; left:68px;">
+                bottom:50px; left:10px;">
                 <div class="agent-orb-inner">
                     <span class="agent-orb-icon">O</span>
                 </div>
@@ -383,11 +384,20 @@
 
             <div class="agent-orb" id="orb-executor"
                 style="--orb-light:#CC80FF;--orb-dark:#4A1580;--orb-border:#AF52DE;--orb-glow:rgba(175,82,222,0.5);--orb-glow-far:rgba(175,82,222,0.15);
-                top:148px; left:18px;">
+                top:120px; left:10px;">
                 <div class="agent-orb-inner">
                     <span class="agent-orb-icon">→</span>
                 </div>
                 <div class="agent-orb-label">Executor</div>
+            </div>
+
+            <div class="agent-orb" id="orb-rainmaker"
+                style="--orb-light:#FFE066;--orb-dark:#8B7300;--orb-border:#FFD700;--orb-glow:rgba(255,215,0,0.5);--orb-glow-far:rgba(255,215,0,0.15);
+                bottom:14px; left:50%; transform:translateX(-50%);">
+                <div class="agent-orb-inner">
+                    <span class="agent-orb-icon">$</span>
+                </div>
+                <div class="agent-orb-label">Rainmaker</div>
             </div>
 
             <!-- Chairman — center -->
@@ -869,7 +879,7 @@
                 document.getElementById('flux-status').innerText = `${slotCount} of 20 messages remembered`;
                 // Show which route handled this request
                 const routeMap = {
-                    'council':        'Council — 6 agents debated in parallel',
+                    'council':        'Council — 7 agents debated in parallel',
                     'browser':        'Web search — browsed live internet',
                     'desktop':        'Desktop agent — controlled your PC',
                     'coding':         'Coding agent — software engineering mode',
@@ -898,7 +908,7 @@
                 if (data.type === "wakeup") isListeningMode = true;
                 if (data.type === "shutdown") isListeningMode = false;
 
-                // 🛠️ DUAL-LAYER FRONTEND NORMALIZER MATRIX FOR 6-SEAT BOARDROOM
+                // 🛠️ DUAL-LAYER FRONTEND NORMALIZER MATRIX FOR 7-SEAT BOARDROOM
                 if (data.type === 'council' || (data.response && typeof data.response === 'object')) {
                     let debate = data.response;
                     
@@ -910,6 +920,7 @@
                                 expansionist: "Upside scalability parsing active.",
                                 outsider: "Objective bias filter active.",
                                 executor: "Next practical step mapping active.",
+                                rainmaker: "Financial viability assessment active.",
                                 chairman: debate
                             };
                         }
@@ -921,6 +932,7 @@
                     const expansionistText = debate.expansionist || debate.Expansionist || "Upside trajectory calculated.";
                     const outsiderText = debate.outsider || debate.Outsider || "Unbiased overview compiled.";
                     const executorText = debate.executor || debate.Executor || "Practical roadmap deployed.";
+                    const rainmakerText = debate.rainmaker || debate.Rainmaker || "Financial viability assessed.";
                     const chairmanText = debate.chairman || debate.Chairman || "Executive directive generated.";
                     
                     const ORB_SEQUENCE = [
@@ -929,6 +941,7 @@
                         { key: 'expansionist',     label: 'The Expansionist',    text: expansionistText,    color: '#34C759', intro: 'Expansionist strategy.' },
                         { key: 'outsider',         label: 'The Outsider',        text: outsiderText,        color: '#5AC8FA', intro: 'Outsider perspective.' },
                         { key: 'executor',         label: 'The Executor',        text: executorText,        color: '#AF52DE', intro: 'Executor directive.' },
+                        { key: 'rainmaker',        label: 'The Rainmaker',       text: rainmakerText,       color: '#FFD700', intro: 'Rainmaker assessment.' },
                     ];
 
                     function setOrbActive(key) {
