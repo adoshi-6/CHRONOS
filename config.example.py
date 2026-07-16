@@ -14,7 +14,7 @@ OLLAMA_SERVER_URL = "http://localhost:11434"
 
 # ── Identity ──────────────────────────────────────────────────
 # The name the assistant calls itself and responds to.
-ASSISTANT_NAME = "Jarvis"
+ASSISTANT_NAME = "CHRONOS"
 
 # The name the assistant uses to address you.
 USER_NAME = "User"
@@ -38,7 +38,7 @@ VOICE_TAG = "en-GB-RyanNeural"
 
 # ── Wake Word ─────────────────────────────────────────────────
 # What you say to activate the assistant when in open-mic mode.
-WAKE_WORD = "hey jarvis"
+WAKE_WORD = "hey CHRONOS"
 
 
 # ── File Paths ────────────────────────────────────────────────

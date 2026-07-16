@@ -52,7 +52,7 @@ DESKTOP_PATH = DESKTOP_PATH
 # ============================================================
 # SECURITY CONFIG
 # ============================================================
-SECURITY_DIR      = "chronos_security"
+SECURITY_DIR      = "CHRONOS_SECURITY"
 PIN_FILE          = os.path.join(SECURITY_DIR, "pin.json")
 os.makedirs(SECURITY_DIR, exist_ok=True)
 
@@ -107,7 +107,7 @@ pending_code_word         = None   # Holds a code word action waiting for PIN co
 # These files let the assistant learn from mistakes and evolve over time.
 # They are plain JSON — you can open and edit them any time.
 # ============================================================
-MEMORY_DIR       = "chronos_memory"
+MEMORY_DIR       = "CHRONOS_MEMORY"
 MISTAKES_FILE    = os.path.join(MEMORY_DIR, "mistakes.json")
 CORRECTIONS_FILE = os.path.join(MEMORY_DIR, "corrections.json")
 SELF_EDITS_FILE  = os.path.join(MEMORY_DIR, "self_edits.json")
@@ -850,11 +850,11 @@ def classify_command_route(command: str) -> str:
         "Answer with ONLY the category name. Example: conversational"
     )
     try:
-        # Determine assistant name dynamically in github version, or use Chronos directly
+        # Determine assistant name dynamically in github version, or use CHRONOS directly
         try:
             name_label = ASSISTANT_NAME
         except NameError:
-            name_label = "Chronos"
+            name_label = "CHRONOS"
             
         reply = ollama_call(FAST_MODEL, system_prompt, f"User command: {command}")
         route = reply.strip().lower().replace("'", "").replace('"', "")

@@ -725,8 +725,8 @@
                 const wakePhrases = [
                     `hey ${nameKey}`, `hi ${nameKey}`, `ok ${nameKey}`, `okay ${nameKey}`, nameKey
                 ];
-                // Support phonetic 'k' variant if configured name is 'chronos'
-                if (nameKey === 'chronos') {
+                // Support phonetic 'k' variant if configured name is 'CHRONOS'
+                if (nameKey === 'CHRONOS') {
                     wakePhrases.push("hey kronos", "hi kronos", "ok kronos", "okay kronos", "kronos");
                 }
                 let matchedWake = "";
@@ -840,8 +840,8 @@
             isServerProcessing = true;
             updateSystemUIState("processing");
             if (typeof payloadText === 'string') {
-                const pattern = ASSISTANT_NAME.toLowerCase() === 'chronos'
-                    ? "\\b(chronos|kronos)\\b"
+                const pattern = ASSISTANT_NAME.toLowerCase() === 'CHRONOS'
+                    ? "\\b(CHRONOS|kronos)\\b"
                     : "\\b" + ASSISTANT_NAME + "\\b";
                 const regex = new RegExp(pattern, 'gi');
                 payloadText = payloadText.replace(regex, ASSISTANT_NAME.toUpperCase());
