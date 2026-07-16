@@ -47,3 +47,6 @@ Thumbs.db
 # Local Personal Configurations
 config.py
 CHRONOS_AUDIO_CACHE/
+
+# Custom Prompt Rules
+AGENT.md
