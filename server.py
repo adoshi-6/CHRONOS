@@ -1,12 +1,22 @@
-from config import (ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL,
-                   DESKTOP_PATH, COUNCIL_TRIGGERS, CODE_WORDS,
-                   PROTECTED_ACTIONS, UNLOCK_PHRASES, PIN_LENGTH,
-                   VOICE_TAG, WAKE_WORD)
 from flask import Flask, request, jsonify
 import hashlib
 import pyautogui   # keyboard and mouse control for desktop typing
 import os
 import sys
+import io
+# Safe UTF-8 console reconfiguration — lets emoji/unicode print without crashing
+# on Windows consoles. Uses reconfigure() instead of manually rewrapping
+# sys.stdout/sys.stderr: rewrapping is NOT idempotent — if this file's
+# top-level code ever runs twice in the same process (e.g. an old launcher
+# script that starts server.py twice), a second raw TextIOWrapper() wrap
+# closes the underlying buffer and crashes with
+# "ValueError: I/O operation on closed file" before Flask ever starts.
+# reconfigure() is safe to call any number of times.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception as _e:
+    print(f"[Console encoding setup skipped: {_e}]")
 import threading
 import time
 import ollama
@@ -16,46 +26,56 @@ import subprocess
 import glob
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 from playwright.sync_api import sync_playwright
-from audio_provider import speak_text
+from audio_provider import speak_text, is_speaking
+
+# ── GPU Server Connection ─────────────────────────────────────────────────────
+# Point this at your Ollama server's Tailscale IP.
+# Change the IP below to match your server — find it with `tailscale ip` on the server.
+# Leave as localhost if running Ollama on this same machine.
+OLLAMA_SERVER_URL = "http://100.88.1.86:11434"
+client = ollama.Client(host=OLLAMA_SERVER_URL)
+# ─────────────────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
 
 # ============================================================
 # MODEL ANCHORS
 # ============================================================
-# CURRENT (temporary — no coding model while waiting for GPU server):
-#   FAST_MODEL   = FAST_MODEL   — fast chat, snappy responses
-#   SMART_MODEL  = SMART_MODEL     — council + research
+# GPU SERVER ACTIVE — models running on RTX 3060 via Tailscale
+#   FAST_MODEL   = "qwen3:4b"          — fast conversational replies
+#   SMART_MODEL  = "deepseek-r1:14b"   — council, research, deep reasoning
+#   CODING_MODEL = None                — load on demand, say "load the coder"
 #
-# UPGRADE TO THESE when your GPU server arrives (add CODING_MODEL back too):
-#   FAST_MODEL   = SMART_MODEL
-#   SMART_MODEL  = SMART_MODEL
-#   CODING_MODEL = "qwen2.5-coder:14b"
-#
-# To switch: restore the lines below and restart server.py. That is all.
+# To point at a different server: change OLLAMA_SERVER_URL below.
 # ============================================================
 
-FAST_MODEL   = FAST_MODEL
-SMART_MODEL  = SMART_MODEL
-CODING_MODEL = None   # Disabled — re-enable when GPU server arrives
+FAST_MODEL   = "qwen3:4b"
+SMART_MODEL  = "deepseek-r1:14b"
+CODING_MODEL = "qwen2.5-coder:14b"   # Re-enabled — runs on GPU server
 
 # ============================================================
-# DESKTOP CONFIG — the user's desktop path
+# DESKTOP CONFIG — Aryan's desktop path
 # ============================================================
-DESKTOP_PATH = DESKTOP_PATH
+DESKTOP_PATH = r"C:\Users\Aryan\OneDrive\Desktop"
 
 # ============================================================
 # SECURITY CONFIG
 # ============================================================
-SECURITY_DIR      = "ace_security"
+SECURITY_DIR      = "chronos_security"
 PIN_FILE          = os.path.join(SECURITY_DIR, "pin.json")
 os.makedirs(SECURITY_DIR, exist_ok=True)
 
-# PROTECTED_ACTIONS loaded from config.py
+# Actions that always require a PIN before running
+PROTECTED_ACTIONS = [
+    "send_message", "delete_data", "change_setting",
+    "first_time_access", "write_file", "store_password",
+    "code_black", "safe_mode", "focus_mode", "stealth_mode",
+    "factory_reset", "briefing",
+]
 
 # Current active mode — changes via code words
 # Modes: "normal", "safe", "focus", "stealth"
-ACE_MODE = "normal"
+CHRONOS_MODE = "normal"
 
 def _hash_pin(pin: str) -> str:
     """SHA-256 hash of the PIN — never store raw digits."""
@@ -99,10 +119,10 @@ pending_code_word         = None   # Holds a code word action waiting for PIN co
 
 # ============================================================
 # SELF-LEARNING MEMORY FILES
-# These files let the assistant learn from mistakes and evolve over time.
+# These files let Chronos learn from mistakes and evolve over time.
 # They are plain JSON — you can open and edit them any time.
 # ============================================================
-MEMORY_DIR       = "ace_memory"
+MEMORY_DIR       = "chronos_memory"
 MISTAKES_FILE    = os.path.join(MEMORY_DIR, "mistakes.json")
 CORRECTIONS_FILE = os.path.join(MEMORY_DIR, "corrections.json")
 SELF_EDITS_FILE  = os.path.join(MEMORY_DIR, "self_edits.json")
@@ -111,9 +131,9 @@ LESSONS_FILE     = os.path.join(MEMORY_DIR, "lessons.json")
 os.makedirs(MEMORY_DIR, exist_ok=True)
 
 
-# 
+# ─────────────────────────────────────────────────────────────
 # SYSTEM PERFORMANCE MONITOR
-# 
+# ─────────────────────────────────────────────────────────────
 
 def get_full_system_report() -> dict:
     """
@@ -186,7 +206,7 @@ def get_full_system_report() -> dict:
 def build_system_advice(report: dict, user_query: str) -> str:
     """
     Feeds raw metrics to the model and asks for plain-English advice
-    specific to the user's question.
+    specific to Aryan's question.
     """
     metrics_text = (
         f"CPU: {report['cpu_percent']}% used ({report['cpu_cores']} cores at {report['cpu_freq']} MHz)\n"
@@ -200,8 +220,12 @@ def build_system_advice(report: dict, user_query: str) -> str:
     )
 
     system_prompt = (
-        f"You are {ASSISTANT_NAME}, {USER_NAME}'s personal AI assistant. No emojis. No filler phrases. "
-        "You have just run a live hardware scan of the user's PC. "
+        "You are Chronos, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler. "
+        "Address the user as 'sir' naturally. "
+        "You have just run a live hardware scan. "
+        "Give a direct assessment and specific actionable advice. "
+        "If something looks bad, say so clearly. Under 5 sentences."
+        "You have just run a live hardware scan of Aryan's PC. "
         "Give a direct assessment of system health and specific actionable advice. "
         "If something looks bad, say so clearly. "
         "If everything is fine, say that too. Keep it under 5 sentences."
@@ -209,7 +233,7 @@ def build_system_advice(report: dict, user_query: str) -> str:
 
     return ollama_call(
         SMART_MODEL, system_prompt,
-        f"{USER_NAME} asked: {user_query}\n\nLive system data:\n{metrics_text}"
+        f"Aryan asked: {user_query}\n\nLive system data:\n{metrics_text}"
     )
 
 def _load_json(path: str, default) -> any:
@@ -281,7 +305,7 @@ def save_self_edit(description: str, change_type: str, detail: str, approved: bo
 def build_lessons_context() -> str:
     """
     Injects stored lessons and recent corrections into the system prompt
-    so the assistant walks into every conversation already knowing what not to repeat.
+    so Chronos walks into every conversation already knowing what not to repeat.
     """
     lessons     = load_lessons()
     corrections = load_corrections()
@@ -297,7 +321,7 @@ def build_lessons_context() -> str:
                          f"'{c['old_response'][:80]}...'. Correct answer: '{c['corrected_response'][:80]}...'")
         parts.append("Recent corrections to remember:\n" + "\n".join(lines))
     if parts:
-        return "\n\n[SELF-LEARNING CONTEXT]\n" + "\n\n".join(parts) + "\n"
+        return "\n\n[CHRONOS SELF-LEARNING CONTEXT]\n" + "\n\n".join(parts) + "\n"
     return ""
 
 # ============================================================
@@ -313,13 +337,82 @@ AGENT_TIMEOUT    = 45   # Max wait per council agent before it's skipped
 BROWSER_TIMEOUT  = 12   # Max wait for a page to load
 
 
-# 
+# ─────────────────────────────────────────────────────────────
 # HELPERS
-# 
+# ─────────────────────────────────────────────────────────────
 
 def strip_think(text: str) -> str:
     """Remove <think>...</think> blocks emitted by reasoning models."""
     return re.sub(r'<think>[\s\S]*?</think>', '', text).strip()
+
+
+def stream_and_speak_sentences(messages: list, model: str, speak: bool = False) -> str:
+    """
+    Streams content from Ollama, extracts full sentences in real-time,
+    and speaks them immediately on background threads.
+    Accumulates and returns the full text response.
+    """
+    try:
+        response_stream = client.chat(model=model, messages=messages, stream=True)
+    except Exception as e:
+        print(f"❌ [Streaming failure]: {e}")
+        raise e
+
+    full_response = []
+    sentence_buffer = ""
+    in_think_block = False
+
+    for chunk in response_stream:
+        content_chunk = chunk['message']['content']
+        full_response.append(content_chunk)
+
+        if speak:
+            sentence_buffer += content_chunk
+
+            # Simple state parser to skip over reasoning block <think>...</think>
+            if "<think>" in sentence_buffer:
+                in_think_block = True
+                if "</think>" in sentence_buffer:
+                    parts = sentence_buffer.split("</think>", 1)
+                    sentence_buffer = parts[1]
+                    in_think_block = False
+                else:
+                    continue
+
+            if in_think_block:
+                continue
+
+            # Split on sentence boundaries: periods, question marks, exclamation marks, or double newlines
+            sentences = re.split(r'(?<=[.!?])\s+|\n\n', sentence_buffer)
+            if len(sentences) > 1:
+                # Speak all completed sentences
+                for sentence in sentences[:-1]:
+                    clean_s = sentence.strip()
+                    if clean_s:
+                        execute_audio_playback(clean_s)
+                # Keep the last incomplete fragment in the buffer
+                sentence_buffer = sentences[-1]
+
+    # Speak any remaining text left in the buffer at the end of the stream
+    if speak:
+        clean_remaining = sentence_buffer.strip()
+        if clean_remaining:
+            clean_remaining = strip_think(clean_remaining)
+            if clean_remaining:
+                execute_audio_playback(clean_remaining)
+
+    return "".join(full_response)
+
+
+def ollama_call_streaming(model: str, system: str, user: str, speak: bool = False) -> str:
+    """
+    Wrapper for streaming system prompts and user inputs dynamically.
+    """
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user},
+    ]
+    return stream_and_speak_sentences(messages, model, speak)
 
 
 def ollama_call(model: str, system: str, user: str) -> str:
@@ -328,7 +421,7 @@ def ollama_call(model: str, system: str, user: str) -> str:
     Returns a plain string — never raises.
     """
     try:
-        res = ollama.chat(model=model, messages=[
+        res = client.chat(model=model, messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user},
         ])
@@ -346,7 +439,7 @@ def ollama_call_coding(system: str, user: str) -> str:
     """
     try:
         print(f"[Coding Model]: Loading {CODING_MODEL} into memory...")
-        res = ollama.chat(
+        res = client.chat(
             model=CODING_MODEL,
             messages=[
                 {"role": "system", "content": system},
@@ -372,24 +465,40 @@ def _run_audio(text: str):
             pass
         speak_text(text)
     except Exception as e:
-        print(f" [Audio Engine]: {e}")
+        print(f"❌ [Audio Engine]: {e}")
 
 
 def execute_audio_playback(text: str):
     """Fire-and-forget TTS — returns immediately."""
+    import audio_provider
+    audio_provider.is_currently_speaking = True
     threading.Thread(target=_run_audio, args=(text,), daemon=True).start()
 
 
-# 
+# ─────────────────────────────────────────────────────────────
 # ROUTING DETECTORS
-# 
+# ─────────────────────────────────────────────────────────────
 
-# 
+# ─────────────────────────────────────────────────────────────
 # SECURITY — CODE WORD DETECTION
-# 
+# ─────────────────────────────────────────────────────────────
 
-# CODE_WORDS, PROTECTED_ACTIONS, and UNLOCK_PHRASES are defined in config.py.
-# Edit config.py to customise your code words, protected actions, and unlock phrases.
+CODE_WORDS = {
+    # phrase to detect          : (internal action key, description shown to user)
+    "code black":    ("code_black",    "shut down everything immediately — server, audio, browser tab"),
+    "safe mode":     ("safe_mode",     "switch to Safe Mode — chat only, no internet or desktop access"),
+    "focus mode":    ("focus_mode",    "switch to Focus Mode — all proactive interruptions blocked"),
+    "stealth mode":  ("stealth_mode",  "switch to Stealth Mode — no audio output, text only"),
+    "briefing":      ("briefing",      "run a full briefing of everything since your last session"),
+    "factory reset": ("factory_reset", "wipe ALL memory — lessons, mistakes, corrections, session history"),
+    "stand down":    ("stand_down",    "pause all background activity but stay online"),
+    "ghost mode":    ("ghost_mode",    "stop logging anything this session — no memory written"),
+    "purge":         ("purge",         "wipe this session only, keep long-term memory"),
+    "lockdown":      ("lockdown",      "stop accepting input from anyone until you say the unlock phrase"),
+    "red alert":     ("red_alert",     "every action requires confirmation regardless of type"),
+    "handoff":       ("handoff",       "save a full session summary to your desktop then shut down"),
+    "debrief":       ("debrief",       "tell you everything Chronos did since you last checked in"),
+}
 
 def detect_code_word(text: str) -> tuple[str, str] | None:
     """Returns (action_key, description) if a code word is found, else None."""
@@ -410,7 +519,7 @@ def execute_code_word(action_key: str) -> str:
     Execute a confirmed (PIN-verified) code word action.
     Returns a plain string reply to send back to the user.
     """
-    global ACE_MODE, chat_history
+    global CHRONOS_MODE, chat_history
 
     if action_key == "code_black":
         # Schedule server shutdown after response is sent
@@ -421,15 +530,15 @@ def execute_code_word(action_key: str) -> str:
         return "Code Black confirmed. Shutting down now."
 
     elif action_key == "safe_mode":
-        ACE_MODE = "safe"
+        CHRONOS_MODE = "safe"
         return "Safe Mode active. Internet and desktop access disabled. Chat only."
 
     elif action_key == "focus_mode":
-        ACE_MODE = "focus"
+        CHRONOS_MODE = "focus"
         return "Focus Mode active. All proactive interruptions blocked."
 
     elif action_key == "stealth_mode":
-        ACE_MODE = "stealth"
+        CHRONOS_MODE = "stealth"
         return "Stealth Mode active. No audio output. Text only."
 
     elif action_key == "briefing":
@@ -455,12 +564,12 @@ def execute_code_word(action_key: str) -> str:
             f"Mistakes logged: {len(mistakes)}.\n"
             f"Self-modifications approved: {len(edits)}. "
             f"Most recent: {chr(59).join(recent_edits) if recent_edits else 'None'}.\n"
-            f"Current mode: {ACE_MODE.upper()}."
+            f"Current mode: {CHRONOS_MODE.upper()}."
         )
 
         summary = ollama_call(
             FAST_MODEL,
-            f"You are {ASSISTANT_NAME} giving {USER_NAME} a concise briefing. No emojis. No filler. "
+            "You are Chronos giving Aryan a concise briefing. No emojis. No filler. "
             "Summarize what has happened this session, what you have learned, "
             "and what your current status is. Be direct and brief — 3 to 5 sentences max.",
             briefing_context
@@ -474,11 +583,11 @@ def execute_code_word(action_key: str) -> str:
         return "Factory reset complete. All memory wiped. Starting clean."
 
     elif action_key == "stand_down":
-        ACE_MODE = "standdown"
+        CHRONOS_MODE = "standdown"
         return "Standing down. Background activity paused. Still here if you need me."
 
     elif action_key == "ghost_mode":
-        ACE_MODE = "ghost"
+        CHRONOS_MODE = "ghost"
         return "Ghost Mode active. Nothing will be logged or remembered this session."
 
     elif action_key == "purge":
@@ -487,16 +596,16 @@ def execute_code_word(action_key: str) -> str:
         return f"Session purged. {count} exchanges cleared. Long-term memory intact."
 
     elif action_key == "lockdown":
-        ACE_MODE = "lockdown"
+        CHRONOS_MODE = "lockdown"
         return "Lockdown active. I will only respond to you saying your name or unlock phrase."
 
     elif action_key == "red_alert":
-        ACE_MODE = "red_alert"
+        CHRONOS_MODE = "red_alert"
         return "Red Alert active. Every action will require your confirmation."
 
     elif action_key == "handoff":
-        summary = f"Session summary — {len(chat_history)//2} exchanges. Mode: {ACE_MODE}. Lessons: {len(load_lessons())}."
-        path = os.path.join(DESKTOP_PATH, "session_handoff.txt")
+        summary = f"Session summary — {len(chat_history)//2} exchanges. Mode: {CHRONOS_MODE}. Lessons: {len(load_lessons())}."
+        path = os.path.join(DESKTOP_PATH, "chronos_handoff.txt")
         try:
             with open(path, "w") as hf:
                 hf.write(summary)
@@ -504,7 +613,7 @@ def execute_code_word(action_key: str) -> str:
                 time.sleep(1.5)
                 os.kill(os.getpid(), 9)
             threading.Thread(target=_shutdown, daemon=True).start()
-            return f"Handoff saved to session_handoff.txt on your desktop. Shutting down."
+            return f"Handoff saved to chronos_handoff.txt on your desktop. Shutting down."
         except Exception as e:
             return f"Handoff file write failed: {e}"
 
@@ -514,7 +623,7 @@ def execute_code_word(action_key: str) -> str:
         parts = [f"Since last session: {len(load_mistakes())} mistakes logged."]
         if recent:
             parts.append("Recent self-changes: " + "; ".join(recent))
-        parts.append(f"Current mode: {ACE_MODE}.")
+        parts.append(f"Current mode: {CHRONOS_MODE}.")
         return " ".join(parts)
 
     return f"Code word '{action_key}' recognised but not yet implemented."
@@ -554,7 +663,7 @@ def should_trigger_browser(text: str) -> bool:
 
 
 def should_trigger_correction(text: str) -> bool:
-    """Detects when the user is telling the assistant it made a mistake."""
+    """Detects when Aryan is telling Chronos it made a mistake."""
     keywords = [
         "that was wrong", "you were wrong", "that's incorrect", "you made a mistake",
         "that's not right", "you got that wrong", "incorrect", "bad answer",
@@ -565,7 +674,7 @@ def should_trigger_correction(text: str) -> bool:
 
 
 def should_trigger_self_modification(text: str) -> bool:
-    """Detects when the user wants the assistant to change how it behaves or learn something."""
+    """Detects when Aryan wants Chronos to change how it behaves or learn something."""
     keywords = [
         "change yourself", "modify yourself", "update yourself", "alter yourself",
         "learn to", "remember to always", "remember to never", "from now on",
@@ -579,12 +688,12 @@ def should_trigger_self_modification(text: str) -> bool:
 
 def build_self_modification_proposal(command: str) -> dict:
     """
-    Uses the model to interpret what the user wants changed and
+    Uses the model to interpret what Aryan wants changed and
     builds a structured proposal to present for approval.
     """
     extraction = ollama_call(
         FAST_MODEL,
-        f"You are {ASSISTANT_NAME}. {USER_NAME} wants you to change something about how you behave. "
+        "You are Chronos. Aryan wants you to change something about how you behave. "
         "Extract and describe the proposed change. "
         "Respond ONLY as JSON: "
         '{"change_type": "behavior|tone|lesson|rule", '
@@ -623,6 +732,30 @@ def apply_self_modification(proposal: dict) -> None:
     print(f"[Self-Modify]: Applied — {proposal.get('description', '')[:80]}")
 
 
+def should_trigger_session_end(text: str) -> bool:
+    """Detects natural end-of-session phrases — triggers Handoff automatically."""
+    phrases = [
+        "wrap it up", "end session", "that's all for today", "thats all for today",
+        "i'm done for today", "im done for today", "shut it down for today",
+        "call it a day", "we're done", "were done", "end of day",
+        "close out", "wrap up for today", "finish up", "good night chronos",
+        "good night", "terminate session", "end the day",
+    ]
+    return any(p in text.lower() for p in phrases)
+
+
+def should_trigger_news_briefing(text: str) -> bool:
+    """Detects requests for a current events or news briefing."""
+    phrases = [
+        "news briefing", "current events", "what's happening", "whats happening",
+        "what happened today", "morning briefing", "daily briefing",
+        "catch me up", "what's in the news", "whats in the news",
+        "news update", "latest news", "headlines", "world news",
+        "brief me on the news", "what did i miss",
+    ]
+    return any(p in text.lower() for p in phrases)
+
+
 def should_trigger_system_monitor(text: str) -> bool:
     """Detects requests about system performance, speed, or hardware health."""
     keywords = [
@@ -646,15 +779,103 @@ def should_trigger_desktop(text: str) -> bool:
     return any(kw in text.lower() for kw in keywords)
 
 
-# 
+def classify_command_route(command: str) -> str:
+    """
+    Classifies the user command using a hybrid model:
+    1. Check for strong local keyword rules first (0ms, 100% correct).
+    2. Fall back to a simplified LLM orchestrator prompt for complex phrasing.
+    """
+    lower = command.lower().strip()
+
+    # --- Hybrid Rule Check ---
+    browser_rules = ["search the web", "search online", "google search", "look up online", "search for", "browse the web"]
+    if any(r in lower for r in browser_rules):
+        return "browser"
+
+    desktop_rules = ["open notepad", "launch notepad", "open calculator", "launch calculator", 
+                     "open chrome", "launch chrome", "open explorer", "open file explorer", 
+                     "list files", "show files", "desktop files"]
+    if any(r in lower for r in desktop_rules):
+        return "desktop"
+
+    system_rules = ["system performance", "cpu usage", "ram usage", "disk usage", 
+                    "battery percentage", "system report", "pc health", "system monitor"]
+    if any(r in lower for r in system_rules):
+        return "system_monitor"
+
+    council_rules = ["ask the council", "boardroom debate", "assemble the council", "council debate"]
+    if any(r in lower for r in council_rules):
+        return "council"
+
+    # Pre-classify conversational queries to bypass LLM routing overhead
+    action_keywords = [
+        "open", "launch", "start", "run", "close", "kill",
+        "search", "google", "look up", "lookup", "browse", "find",
+        "monitor", "system", "performance", "cpu", "ram", "disk", "battery", "pc", "health", "report",
+        "council", "debate", "boardroom",
+        "news", "headlines", "briefing",
+        "modify", "teach", "learn", "rule",
+        "wrong", "mistake", "correction", "incorrect",
+        "wrap", "bye", "exit", "shutdown", "pin", "security",
+        "code", "coding", "program", "script", "develop", "bug"
+    ]
+    if not any(k in lower for k in action_keywords):
+        return 'conversational'
+
+    # --- Simplified LLM orchestrator classifier ---
+    system_prompt = (
+        "Classify the user command into exactly one category:\n"
+        "council: boardroom/council debate\n"
+        "browser: search the web, check online info/news\n"
+        "system_monitor: CPU, RAM, disk, PC health, performance\n"
+        "desktop: open/launch/close apps, files, folders, or local controls\n"
+        "coding: writing code, programming, scripts, debugging\n"
+        "session_end: wrap up, end session, done, bye\n"
+        "news_briefing: daily news/headlines report\n"
+        "self_modification: change rules/behavior, teach new lessons\n"
+        "correction: feedback that previous response was wrong/incorrect\n"
+        "conversational: standard chat, math, questions, general talk\n"
+        "\n"
+        "Answer with ONLY the category name. Example: conversational"
+    )
+    try:
+        # Determine assistant name dynamically in github version, or use Chronos directly
+        try:
+            name_label = ASSISTANT_NAME
+        except NameError:
+            name_label = "Chronos"
+            
+        reply = ollama_call(FAST_MODEL, system_prompt, f"User command: {command}")
+        route = reply.strip().lower().replace("'", "").replace('"', "")
+        
+        # Keyword-to-route synonym mapping to make classification robust
+        route_mapping = {
+            'browser': ['browser', 'web', 'internet', 'search', 'google', 'duckduckgo', 'lookup', 'online'],
+            'desktop': ['desktop', 'application', 'app', 'launch', 'open', 'close', 'run', 'local', 'file', 'folder', 'cmd', 'command'],
+            'system_monitor': ['system_monitor', 'system', 'monitor', 'cpu', 'ram', 'performance', 'health', 'battery', 'metrics'],
+            'coding': ['coding', 'code', 'script', 'compile', 'debug', 'programming', 'develop'],
+            'council': ['council', 'debate', 'boardroom', 'consult'],
+            'session_end': ['session_end', 'end', 'wrap', 'close', 'exit', 'bye', 'goodnight'],
+            'news_briefing': ['news_briefing', 'briefing', 'headlines'],
+            'self_modification': ['self_modification', 'modify', 'behavior', 'learn', 'rule'],
+            'correction': ['correction', 'correct', 'wrong', 'mistake', 'incorrect']
+        }
+        for r, keywords in route_mapping.items():
+            if any(k in route for k in keywords):
+                return r
+        return 'conversational'
+    except Exception as e:
+        print(f"?? [Routing classification error]: {e}")
+        return 'conversational'
+# ─────────────────────────────────────────────────────────────
 # PARALLEL COUNCIL — all 5 agents fire simultaneously
 # Chairman runs after they all finish (needs their output)
-# 
+# ─────────────────────────────────────────────────────────────
 
 COUNCIL_AGENTS = {
     "contrarian": {
         "system": (
-            f"You are The Contrarian on {ASSISTANT_NAME}'s advisory council. "
+            "You are The Contrarian on Chronos's advisory council. "
             "Your job: identify every critical risk, flaw, hidden cost, and reason this idea will fail. "
             "Be direct and ruthless. No fluff. Maximum 2 sentences. "
             "Do not begin with 'As a contrarian' or similar preamble."
@@ -663,7 +884,7 @@ COUNCIL_AGENTS = {
     },
     "first_principles": {
         "system": (
-            f"You are the First Principles Thinker on {ASSISTANT_NAME}'s advisory council. "
+            "You are the First Principles Thinker on Chronos's advisory council. "
             "Strip every assumption and analogy. Rebuild the core logic from raw axioms only. "
             "Maximum 2 sentences. No preamble."
         ),
@@ -671,7 +892,7 @@ COUNCIL_AGENTS = {
     },
     "expansionist": {
         "system": (
-            f"You are The Expansionist on {ASSISTANT_NAME}'s advisory council. "
+            "You are The Expansionist on Chronos's advisory council. "
             "Find the biggest hidden upside, scalability plays, and opportunities being missed. "
             "Maximum 2 sentences. No preamble."
         ),
@@ -679,7 +900,7 @@ COUNCIL_AGENTS = {
     },
     "outsider": {
         "system": (
-            f"You are The Outsider on {ASSISTANT_NAME}'s advisory council. "
+            "You are The Outsider on Chronos's advisory council. "
             "Evaluate with complete objectivity. No jargon, no emotional attachment. "
             "Would this make sense to a smart person with no industry knowledge? "
             "Maximum 2 sentences. No preamble."
@@ -688,7 +909,7 @@ COUNCIL_AGENTS = {
     },
     "executor": {
         "system": (
-            f"You are The Executor on {ASSISTANT_NAME}'s advisory council. "
+            "You are The Executor on Chronos's advisory council. "
             "Ignore theory. Focus only on execution. "
             "What is the single most concrete, actionable next step to take right now? "
             "Maximum 2 sentences. No preamble."
@@ -698,7 +919,7 @@ COUNCIL_AGENTS = {
 }
 
 CHAIRMAN_SYSTEM = (
-    f"You are The Chairman of {ASSISTANT_NAME}'s advisory council. "
+    "You are The Chairman of Chronos's advisory council. "
     "You have received independent briefs from 5 specialist agents. "
     "Synthesize them into one clear, unified recommendation — the single best path forward. "
     "Be decisive. No hedging. Maximum 3 sentences."
@@ -721,7 +942,7 @@ def run_parallel_council(idea: str) -> dict:
     Chairman runs after all 5 complete (needs their output to synthesize).
     Total wall time ≈ slowest single agent + chairman, not sum of all 6.
     """
-    print(f"\n [Hermes Council]: Firing 5 agents in parallel via {SMART_MODEL}...")
+    print(f"\n👥 [Hermes Council]: Firing 5 agents in parallel via {SMART_MODEL}...")
     results = {}
 
     # Submit all 5 agents at once
@@ -735,13 +956,13 @@ def run_parallel_council(idea: str) -> dict:
         try:
             _, verdict = future.result(timeout=AGENT_TIMEOUT)
             results[seat] = verdict
-            print(f"   {seat} complete.")
+            print(f"  ✅ {seat} complete.")
         except FuturesTimeout:
             results[seat] = "Agent timed out — skipped."
-            print(f"  ⏱  {seat} timed out.")
+            print(f"  ⏱️  {seat} timed out.")
         except Exception as e:
             results[seat] = f"Agent error: {e}"
-            print(f"   {seat} failed: {e}")
+            print(f"  ❌ {seat} failed: {e}")
 
     # Chairman runs last — needs all 5 briefs
     print("  -> Chairman synthesizing...")
@@ -754,21 +975,21 @@ def run_parallel_council(idea: str) -> dict:
         f"Executor: {results.get('executor', 'N/A')}"
     )
     results["chairman"] = ollama_call(SMART_MODEL, CHAIRMAN_SYSTEM, chairman_input)
-    print("   Chairman complete.\n")
+    print("  ✅ Chairman complete.\n")
 
     return results
 
 
-# 
+# ─────────────────────────────────────────────────────────────
 # BROWSER HARNESS — internet access
-# 
+# ─────────────────────────────────────────────────────────────
 
 def execute_browser_harness(user_query: str) -> str:
     """
     Uses Playwright to scrape a DuckDuckGo search for live web context.
     Falls back gracefully if the browser can't connect.
     """
-    print(f" [Browser Harness]: Query: '{user_query}'")
+    print(f"🌐 [Browser Harness]: Query: '{user_query}'")
 
     # Ask the fast model to extract clean search terms
     try:
@@ -784,35 +1005,73 @@ def execute_browser_harness(user_query: str) -> str:
 
     target_url = (
         target_search if target_search.startswith("http")
-        else f"https://html.duckduckgo.com/html/?q={target_search.replace(' ', '+')}"
+        else f"https://www.bing.com/search?q={target_search.replace(' ', '+')}"
     )
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page    = browser.new_page()
-            print(f"  Navigating -> {target_url}")
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720}
+            )
+            page    = context.new_page()
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            print(f"🛰️  Navigating -> {target_url}")
             page.goto(target_url, timeout=BROWSER_TIMEOUT * 1000)
-            page.wait_for_load_state("domcontentloaded")
+            page.wait_for_load_state("networkidle")
             raw_text    = page.inner_text("body")
             clean_lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
             # Take first 60 lines — more context for better synthesis
             scraped     = " ".join(clean_lines[:60])
             browser.close()
-            print(" [Browser]: Context extracted.")
+            print("✅ [Browser]: Context extracted.")
             return scraped
     except Exception as e:
-        print(f" [Browser Failure]: {e}")
+        print(f"❌ [Browser Failure]: {e}")
         return f"Browser unavailable: {e}"
 
 
-# 
-# DESKTOP ACCESS — files and apps on the user's machine
-# 
+# ─────────────────────────────────────────────────────────────
+# DESKTOP ACCESS — files and apps on Aryan's machine
+# ─────────────────────────────────────────────────────────────
+
+def focus_window(title_substring: str) -> bool:
+    import ctypes
+    EnumWindows = ctypes.windll.user32.EnumWindows
+    EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_pointer)
+    GetWindowText = ctypes.windll.user32.GetWindowTextW
+    GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
+    IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+    SetForegroundWindow = ctypes.windll.user32.SetForegroundWindow
+    ShowWindow = ctypes.windll.user32.ShowWindow
+
+    found_hwnd = []
+
+    def foreach_window(hwnd, lParam):
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLength(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                GetWindowText(hwnd, buff, length + 1)
+                title = buff.value.lower()
+                if title_substring.lower() in title:
+                    found_hwnd.append(hwnd)
+                    return False # stop enumeration
+        return True
+
+    EnumWindows(EnumWindowsProc(foreach_window), 0)
+    if found_hwnd:
+        hwnd = found_hwnd[0]
+        ShowWindow(hwnd, 9) # Restore window if minimized
+        SetForegroundWindow(hwnd)
+        return True
+    return False
+
 
 def handle_desktop_command(command: str) -> str:
     """
-    Gives the assistant access to the user's desktop:
+    Gives access to Aryan's desktop:
     - Open applications (notepad, calculator, chrome, explorer)
     - List files on the desktop
     - Read a named file from the desktop
@@ -820,6 +1079,19 @@ def handle_desktop_command(command: str) -> str:
     - Open a specific file with its default app
     """
     lower = command.lower()
+
+    # --- Advanced window management ---
+    if any(k in lower for k in ["focus", "bring to front", "maximize", "show window", "bring"]):
+        words = lower.split()
+        ignore = ["bring", "to", "the", "front", "of", "screen", "my", "focus", "show", "window", "app", "application", "please", "now"]
+        name_words = [w for w in words if w not in ignore]
+        if name_words:
+            app_name = name_words[0]
+            if focus_window(app_name):
+                return f"Brought {app_name} to the front."
+            else:
+                return f"Could not find any running window matching '{app_name}'."
+
 
     # --- App launching ---
     app_map = {
@@ -836,6 +1108,19 @@ def handle_desktop_command(command: str) -> str:
                 return f"Launched {keyword}."
             except Exception as e:
                 return f"Couldn't launch {keyword}: {e}"
+
+    # General app launching fallback using Windows Shell start command!
+    if any(k in lower for k in ["open", "launch", "start"]):
+        words = lower.split()
+        ignore = ["open", "launch", "start", "the", "app", "application", "please", "app:"]
+        name_words = [w for w in words if w not in ignore]
+        if name_words:
+            app_name = name_words[0]
+            try:
+                subprocess.Popen(f"start {app_name}", shell=True)
+                return f"Launched {app_name}."
+            except Exception as e:
+                return f"Could not launch {app_name}: {e}"
 
     # --- List desktop files ---
     if any(kw in lower for kw in ["list files", "show files", "what's on my desktop", "files on desktop"]):
@@ -924,9 +1209,9 @@ def handle_desktop_command(command: str) -> str:
     return "Desktop command not recognised. Try: 'open notepad', 'list files', 'read notes.txt', 'write to todo.txt: buy milk', or 'type hello world'."
 
 
-# 
+# ─────────────────────────────────────────────────────────────
 # FLASK ROUTES
-# 
+# ─────────────────────────────────────────────────────────────
 
 
 @app.route('/api/pin_status', methods=['GET'])
@@ -934,7 +1219,7 @@ def pin_status():
     """Frontend polls this on load to know if PIN setup is needed."""
     return jsonify({
         "pin_set": pin_is_set(),
-        "ace_mode": ACE_MODE,
+        "CHRONOS_MODE": CHRONOS_MODE,
     })
 
 
@@ -943,10 +1228,29 @@ def stop_audio():
     """Kill audio immediately — called when browser tab loses focus."""
     try:
         import ctypes as _ct
-        _ct.windll.winmm.mciSendStringW('stop ace_audio', None, 0, 0)
-        _ct.windll.winmm.mciSendStringW('close ace_audio', None, 0, 0)
+        _ct.windll.winmm.mciSendStringW('stop chronos_audio', None, 0, 0)
+        _ct.windll.winmm.mciSendStringW('close chronos_audio', None, 0, 0)
     except Exception:
         pass
+    return jsonify({"status": "stopped"})
+
+
+@app.route('/api/is_speaking', methods=['GET'])
+def check_is_speaking():
+    """
+    Frontend polls this after every response to know when Chronos has
+    finished talking so it can safely re-arm the microphone. Without this
+    route the frontend's restart-listening loop has nothing valid to poll
+    and the mic never comes back on after the first reply.
+    """
+    return jsonify({"speaking": is_speaking()})
+
+
+@app.route('/api/stop_audio', methods=['POST'])
+def stop_audio_endpoint():
+    """Immediately stops all TTS audio output."""
+    import audio_provider
+    audio_provider.stop_all_audio()
     return jsonify({"status": "stopped"})
 
 
@@ -992,7 +1296,7 @@ def handle_isolated_playback():
 @app.route('/api/command', methods=['POST'])
 def orchestrate_command_routing():
     global chat_history, pending_memory_clear, interaction_session_counter, pending_self_modification
-    global pending_pin_action, pending_pin_setup, pending_code_word, ACE_MODE
+    global pending_pin_action, pending_pin_setup, pending_code_word, CHRONOS_MODE
     start_time = time.time()
 
     data    = request.get_json() or {}
@@ -1003,29 +1307,29 @@ def orchestrate_command_routing():
         return jsonify({"response": "Empty command.", "execution_time": 0.0})
 
     interaction_session_counter += 1
-    print(f"\n [{source.upper()}] #{interaction_session_counter}: \"{command}\"")
+    print(f"\n📥 [{source.upper()}] #{interaction_session_counter}: \"{command}\"")
     lower_cmd      = command.lower()
     context_string = f"{len(chat_history)}/20 SLOTS"
 
     def respond(reply, rtype="standard", model=FAST_MODEL, speak=False):
         """Helper to build a consistent response dict and optionally speak."""
-        if speak and source == 'voice' and ACE_MODE != "stealth":
+        if speak and source == 'voice' and CHRONOS_MODE != "stealth":
             execute_audio_playback(reply if isinstance(reply, str) else "Response ready.")
         return jsonify({
             "response":          reply,
             "type":              rtype,
             "model":             model,
-            "ace_mode":          ACE_MODE,
+            "CHRONOS_MODE":          CHRONOS_MODE,
             "interaction_count": interaction_session_counter,
             "context_loaded":    context_string,
             "execution_time":    round(time.time() - start_time, 2),
         })
 
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     # SECURITY GATES — checked before anything else
-    # 
+    # ══════════════════════════════════════════════════════════════════════
 
-    #  First-run PIN setup 
+    # ── First-run PIN setup ──────────────────────────────────────────────
     if not pin_is_set() and not pending_pin_setup:
         pending_pin_setup = True
         reply = (
@@ -1045,20 +1349,20 @@ def orchestrate_command_routing():
             reply = "That does not look like a 6-digit number. Please enter your 6-digit PIN."
         return respond(reply, speak=True)
 
-    #  Stealth mode — no audio output 
-    if ACE_MODE == "stealth":
+    # ── Stealth mode — no audio output ──────────────────────────────────
+    if CHRONOS_MODE == "stealth":
         source = "text"   # Force text-only — no TTS fired regardless of source
 
-    #  Lockdown mode — ignore everyone 
-    if ACE_MODE == "lockdown":
-        unlock_phrases = UNLOCK_PHRASES
+    # ── Lockdown mode — ignore everyone ─────────────────────────────────
+    if CHRONOS_MODE == "lockdown":
+        unlock_phrases = ["aryan", "unlock", "i am aryan", "this is aryan"]
         if not any(p in lower_cmd for p in unlock_phrases):
             return respond("Lockdown active. Not responding.", speak=False)
         else:
-            ACE_MODE = "normal"
-            return respond("Lockdown lifted. Welcome back, {USER_NAME}.", speak=True)
+            CHRONOS_MODE = "normal"
+            return respond("Lockdown lifted. Welcome back, Aryan.", speak=True)
 
-    #  Code word detection 
+    # ── Code word detection ──────────────────────────────────────────────
     code_match = detect_code_word(command)
     if code_match and not pending_code_word:
         action_key, description = code_match
@@ -1070,20 +1374,20 @@ def orchestrate_command_routing():
         )
         return respond(reply, speak=True)
 
-    #  Code word PIN confirmation 
+    # ── Code word PIN confirmation ───────────────────────────────────────
     if pending_code_word:
         entered = extract_pin_from_text(command)
         if entered and pin_matches(entered):
             action = pending_code_word
             pending_code_word = None
             result = execute_code_word(action)
-            return respond(result, speak=(ACE_MODE != "stealth"))
+            return respond(result, speak=(CHRONOS_MODE != "stealth"))
         else:
             pending_code_word = None
             reply = "Incorrect PIN. Code word action cancelled."
             return respond(reply, speak=True)
 
-    #  Pending PIN gate — waiting for PIN before a protected action 
+    # ── Pending PIN gate — waiting for PIN before a protected action ─────
     if pending_pin_action:
         entered = extract_pin_from_text(command)
         if entered and pin_matches(entered):
@@ -1098,7 +1402,7 @@ def orchestrate_command_routing():
             reply = "Incorrect PIN. Action cancelled."
             return respond(reply, speak=True)
 
-    #  Memory purge confirmation gate 
+    # ── Memory purge confirmation gate ──────────────────────────────────────
     if pending_memory_clear:
         if any(w in lower_cmd for w in ["yes", "confirm", "do it", "sure", "go ahead"]):
             purge_type = pending_memory_clear  # "session", "lessons", or "all"
@@ -1135,7 +1439,7 @@ def orchestrate_command_routing():
             reply = "Unclear — erased nothing to be safe."
         return respond(reply, speak=True)
 
-    #  Memory purge request 
+    # ── Memory purge request ────────────────────────────────────────────────
     purge_actions  = ["clear", "wipe", "reset", "delete", "purge", "forget", "erase"]
     memory_targets = ["memory", "history", "logs", "context", "cache",
                       "lessons", "mistakes", "corrections", "everything"]
@@ -1181,7 +1485,7 @@ def orchestrate_command_routing():
         pending_memory_clear = scope
         return respond(preview, speak=True)
 
-    #  Mode deactivation — turn off any active mode 
+    # ── Mode deactivation — turn off any active mode ────────────────────────
     mode_off_phrases = [
         "disable safe mode", "turn off safe mode", "exit safe mode", "leave safe mode",
         "disable focus mode", "turn off focus mode", "exit focus mode",
@@ -1192,45 +1496,49 @@ def orchestrate_command_routing():
         "disable lockdown", "exit lockdown",
         "cancel mode", "deactivate mode", "clear mode", "reset mode",
     ]
-    if any(phrase in lower_cmd for phrase in mode_off_phrases) and ACE_MODE != "normal":
-        old_mode = ACE_MODE
-        ACE_MODE = "normal"
+    if any(phrase in lower_cmd for phrase in mode_off_phrases) and CHRONOS_MODE != "normal":
+        old_mode = CHRONOS_MODE
+        CHRONOS_MODE = "normal"
         reply = f"{old_mode.replace('_', ' ').title()} deactivated. Back to normal."
         return respond(reply, speak=True)
 
-    #  Voice control 
-    if any(x in lower_cmd for x in ["turn microphone off", "microphone off", "voice mode off", "deactivate voice"]):
-        reply = f"Entering standby. Say '{WAKE_WORD}' or 'activate voice mode' when you need me."
+    # ── Voice control ───────────────────────────────────────────────────────
+    if any(x in lower_cmd for x in ["turn microphone off", "microphone off", "voice mode off", "deactivate voice", "turn off voice mode", "turn off the microphone"]):
+        reply = "Entering standby. Say 'Hey Chronos' or 'activate voice mode' when you need me."
         return respond(reply, rtype="shutdown", speak=True)
 
     if any(x in lower_cmd for x in ["activate voice mode", "turn on microphone", "voice mode on"]):
-        reply = "Voice channels open, {USER_NAME}. Listening."
+        reply = "Voice channels open, Aryan. Listening."
         execute_audio_playback(reply)
         return respond(reply, rtype="wakeup")
 
-    #  Safe mode guard — block internet and desktop 
-    if ACE_MODE == "safe":
-        if should_trigger_browser(command) or should_trigger_desktop(command):
+    # ── Intent Classification Route ───────────────────────────────────────
+    route = classify_command_route(command)
+    print(f"🎯 [Hermes Orchestrator] Dynamic LLM Route: {route}")
+
+    # ── Safe mode guard — block internet and desktop ─────────────────────
+    if CHRONOS_MODE == "safe":
+        if route in ("browser", "desktop"):
             return respond(
                 "Safe Mode is active — internet and desktop access are disabled. "
                 "Say 'disable safe mode' and enter your PIN to restore full access.",
                 speak=True
             )
 
-    #  Red alert guard — every action needs confirmation 
-    if ACE_MODE == "red_alert" and not pending_pin_action:
+    # ── Red alert guard — every action needs confirmation ─────────────────
+    if CHRONOS_MODE == "red_alert" and not pending_pin_action:
         pending_pin_action = {"command": command, "action": "red_alert_confirm"}
         return respond(
             "Red Alert is active. Enter your PIN to confirm this action.",
             speak=True
         )
 
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     # CASE A — PARALLEL COUNCIL
     # All 5 agents fire at the same time. Total wait ≈ slowest single agent.
-    # 
-    if should_trigger_council(command):
-        print(f" [Hermes]: Parallel council assembling...")
+    # ══════════════════════════════════════════════════════════════════════
+    if route == "council":
+        print(f"👥 [Hermes]: Parallel council assembling...")
         try:
             debate_packet = run_parallel_council(command)
             return jsonify({
@@ -1242,35 +1550,40 @@ def orchestrate_command_routing():
                 "execution_time":    round(time.time() - start_time, 2),
             })
         except Exception as e:
-            print(f" [Council crash]: {e}")
+            print(f"❌ [Council crash]: {e}")
             return respond(f"Council assembly failed: {e}")
 
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     # CASE B — INTERNET / BROWSER HARNESS
-    # 
-    elif should_trigger_browser(command):
-        print(f" [Hermes]: Browser harness active...")
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "browser":
+        print(f"🌐 [Hermes]: Browser harness active...")
         web_context = execute_browser_harness(command)
         synthesis_system = (
-            f"You are {ASSISTANT_NAME}, {USER_NAME}'s personal AI assistant with live web access. "
+            "You are Chronos, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. with live web access. "
+            "No emojis. No filler. Address the user as 'sir'. "
+            "Summarize key facts from web data to answer directly. "
+            "2 to 4 sentences. Skip ads and nav text. "
+            "If data does not contain an answer, say so plainly."
             "Never use emojis. Never start with filler phrases like Certainly or Great question. "
-            "Summarize the most relevant facts from the web data to answer the user's question directly. "
+            "Summarize the most relevant facts from the web data to answer Aryan's question directly. "
             "2 to 4 sentences max. Skip navigation text and ads. "
             "If the data does not contain an answer, say so plainly."
         )
         try:
-            reply = ollama_call(
+            reply = ollama_call_streaming(
                 SMART_MODEL, synthesis_system,
-                f"{USER_NAME} asked: {command}\n\nLive web data:\n{web_context}"
+                f"Aryan asked: {command}\n\nLive web data:\n{web_context}",
+                speak=(source == 'voice' and CHRONOS_MODE != "stealth")
             )
-            return respond(reply, rtype="browser", model="hermes-browser", speak=True)
+            return respond(reply, rtype="browser", model="hermes-browser", speak=False)
         except Exception as e:
             return respond(f"Browser synthesis failed: {e}", rtype="browser")
 
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     # CASE C — SYSTEM PERFORMANCE MONITOR
-    # 
-    elif should_trigger_system_monitor(command):
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "system_monitor":
         print(f"[Hermes]: System monitor active...")
         try:
             report = get_full_system_report()
@@ -1295,29 +1608,23 @@ def orchestrate_command_routing():
         except Exception as e:
             return respond(f"System scan failed: {e}")
 
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     # CASE D — DESKTOP ACCESS
-    # 
-    elif should_trigger_desktop(command):
-        print(f"  [Hermes]: Desktop agent active...")
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "desktop":
+        print(f"🖥️  [Hermes]: Desktop agent active...")
         result = handle_desktop_command(command)
         return respond(result, rtype="desktop", model="desktop-agent", speak=True)
 
-    # 
-    # CASE D — CODING AGENT (disabled — no model loaded)
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE D2 — CODING AGENT (disabled — no model loaded)
     # Re-enable when GPU server arrives by setting CODING_MODEL above.
-    # 
-    elif should_trigger_coding_agent(command):
-        if not CODING_MODEL:
-            reply = (
-                "Coding mode is offline until the GPU server arrives, {USER_NAME}. "
-                "I can still talk through logic or approach with you — just can't run the model right now."
-            )
-            return respond(reply, speak=True)
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "coding":
         print(f"[Hermes]: Coding agent requested -> {CODING_MODEL}")
         coding_system = (
-            f"You are {ASSISTANT_NAME}'s software engineering agent for the user. "
-            "Never use emojis. Never start with filler phrases like Certainly or Great question. "
+            "You are Chronos's software engineering agent. No emojis. No filler. "
+            "Address the user as 'sir' naturally. "
             "Provide clean, working code with the shortest necessary explanation. "
             "If fixing something, state what was wrong in one sentence first."
         )
@@ -1325,12 +1632,54 @@ def orchestrate_command_routing():
             execute_audio_playback("Code compiled. Dropping it into your viewport now.")
         return respond(reply, rtype="coding", model=CODING_MODEL)
 
-    # 
-    # CASE E — SELF-MODIFICATION REQUEST
-    # The user asks the assistant to change how it behaves, learn something, or fix itself.
-    # The assistant proposes the change, then waits for explicit approval before applying.
-    # 
-    elif should_trigger_self_modification(command):
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE E — SESSION END ("wrap it up", "end session", etc.)
+    # Triggers Handoff automatically — saves summary and shuts down.
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "session_end":
+        result = execute_code_word("handoff")
+        return respond(result, speak=True)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE F — CURRENT EVENTS / NEWS BRIEFING
+    # Searches the web for top headlines and summarises them.
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "news_briefing":
+        print(f"[Hermes]: News briefing requested...")
+        queries = [
+            "top world news headlines today",
+            "top US news headlines today",
+            "technology news today",
+        ]
+        all_context = []
+        for q in queries:
+            ctx = execute_browser_harness(q)
+            if ctx and "unavailable" not in ctx.lower():
+                all_context.append(ctx[:600])
+
+        combined = "\n\n".join(all_context) if all_context else "No news data retrieved."
+
+        news_system = (
+            "You are Chronos, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. delivering a morning news briefing. "
+            "No emojis. No filler. Address the user as 'sir'. "
+            "Summarise the most important headlines from the data provided. "
+            "Group by category if possible: world, US, tech. "
+            "Be concise — this is a spoken briefing, not an article. "
+            "Under 8 sentences total."
+        )
+        reply = ollama_call_streaming(
+            SMART_MODEL, news_system,
+            f"Today's news data:\n{combined}",
+            speak=(source == 'voice' and CHRONOS_MODE != "stealth")
+        )
+        return respond(reply, rtype="browser", model="news-briefing", speak=False)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE G — SELF-MODIFICATION REQUEST
+    # Aryan asks Chronos to change how it behaves, learn something, or fix itself.
+    # Chronos proposes the change, then waits for explicit approval before applying.
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "self_modification":
         print(f"[Self-Modify]: Self-modification request detected.")
         proposal = build_self_modification_proposal(command)
         global pending_self_modification
@@ -1343,9 +1692,9 @@ def orchestrate_command_routing():
         )
         return respond(reply, speak=True)
 
-    # 
-    # CASE F — SELF-MODIFICATION APPROVAL GATE
-    # 
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE H — SELF-MODIFICATION APPROVAL GATE
+    # ══════════════════════════════════════════════════════════════════════
     elif pending_self_modification and any(w in lower_cmd for w in ["yes apply", "approve", "confirm it", "go ahead", "apply it"]):
         proposal = pending_self_modification
         pending_self_modification = None
@@ -1357,11 +1706,11 @@ def orchestrate_command_routing():
         pending_self_modification = None
         return respond("Change rejected and discarded. No modifications made.", speak=True)
 
-    # 
-    # CASE G — EXPLICIT CORRECTION ("that was wrong", "you made a mistake")
-    # The assistant logs the mistake and asks the user for the correct answer.
-    # 
-    elif should_trigger_correction(command):
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE I — EXPLICIT CORRECTION ("that was wrong", "you made a mistake")
+    # Chronos logs the mistake and asks Aryan for the correct answer.
+    # ══════════════════════════════════════════════════════════════════════
+    elif route == "correction":
         print(f"[Self-Learn]: Correction signal detected.")
         # Find the last assistant reply to log as the bad response
         last_reply   = next((m["content"] for m in reversed(chat_history) if m["role"] == "assistant"), "unknown")
@@ -1370,7 +1719,7 @@ def orchestrate_command_routing():
         # Derive a lesson automatically
         lesson_text = ollama_call(
             FAST_MODEL,
-            f"You are {ASSISTANT_NAME}. Based on the mistake described, write one short lesson (1 sentence) "
+            "You are Chronos. Based on the mistake described, write one short lesson (1 sentence) "
             "that you should remember to avoid repeating this error. Start with 'Remember:'.",
             f"Mistake: {command}\nBad response was: {last_reply}"
         )
@@ -1383,19 +1732,21 @@ def orchestrate_command_routing():
         chat_history.append({"role": "assistant",  "content": reply})
         return respond(reply, speak=True)
 
-    # 
-    # CASE H — FAST CONVERSATIONAL CHAT (default)
+    # ══════════════════════════════════════════════════════════════════════
+    # CASE J — FAST CONVERSATIONAL CHAT (default)
     # Lessons from past mistakes are injected into the system prompt.
-    # 
+    # ══════════════════════════════════════════════════════════════════════
     else:
-        print(f" [Hermes]: Conversational route -> {FAST_MODEL}")
+        print(f"⚡ [Hermes]: Conversational route -> {FAST_MODEL}")
         lessons_ctx = build_lessons_context()
         chat_system = (
-            f"You are {ASSISTANT_NAME}, {USER_NAME}'s personal AI assistant. "
-            "Never use emojis. Never start with filler phrases like Certainly or Great question. "
-            "Speak like a sharp, trusted friend — warm, plain-spoken, and brief. "
-            f"Keep responses to 1 or 2 sentences unless {USER_NAME} asks for more detail. "
-            "If you do not know something, say so plainly."
+            "You are Chronos, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler phrases. "
+            "You have full capabilities to search the internet/web (via the browser harness) and execute commands/open applications on the user's desktop. Never claim that you cannot access the internet, browse the web, or control the desktop. "
+            "Speak like a sharp, trusted friend — warm, direct, and brief. "
+            "Address the user as 'sir' naturally in conversation. "
+            "Keep responses to 1 or 2 sentences unless more detail is asked for. "
+            "If you do not know something, say so plainly. "
+            "Never agree with bad ideas just to be agreeable — push back honestly when needed."
             + lessons_ctx
         )
         messages = [{"role": "system", "content": chat_system}]
@@ -1403,8 +1754,10 @@ def orchestrate_command_routing():
         messages.append({"role": "user", "content": command})
 
         try:
-            res   = ollama.chat(model=FAST_MODEL, messages=messages)
-            reply = strip_think(res['message']['content'])
+            reply = stream_and_speak_sentences(
+                messages, FAST_MODEL,
+                speak=(source == 'voice' and CHRONOS_MODE != "stealth")
+            )
 
             chat_history.append({"role": "user",      "content": command})
             chat_history.append({"role": "assistant",  "content": reply})
@@ -1412,14 +1765,14 @@ def orchestrate_command_routing():
                 chat_history = chat_history[-20:]
             context_string = f"{len(chat_history)}/20 SLOTS"
 
-            return respond(reply, speak=True)
+            return respond(reply, speak=False)
         except Exception as e:
             return respond(f"Conversation pipeline dropped: {e}")
 
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print(f"  {ASSISTANT_NAME.upper()} SERVER — Hermes Parallel Architecture")
+    print("  CHRONOS SERVER — Hermes Parallel Architecture")
     print(f"  Fast:   {FAST_MODEL}")
     print(f"  Smart:  {SMART_MODEL}")
     print(f"  Coding: {CODING_MODEL}")

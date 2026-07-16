@@ -1,33 +1,23 @@
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS
-from config import SMART_MODEL
 
-# Uses the OpenAI-compatible API that Ollama exposes on port 11434.
-# This lets us use the standard OpenAI SDK to talk to local models.
 client = OpenAI(
     base_url="http://localhost:11434/v1",
-    api_key="ollama"   # Ollama requires any non-empty string here
+    api_key="ollama"
 )
 
-
-def generate_response(conversation_history: list, system_prompt: str):
-    """
-    Sends the full conversation to the local model and returns a streaming
-    response object. Tool definitions are passed so the model can decide
-    to call a tool rather than reply in text.
-
-    Returns None on connection error (e.g. Ollama not running).
-    """
+def generate_response(conversation_history, system_prompt):
     messages = [{"role": "system", "content": system_prompt}] + conversation_history
-
+    
     try:
+        # We pass the TOOL_DEFINITIONS schema array straight to the local model
         response = client.chat.completions.create(
-            model=SMART_MODEL,
+            model="qwen2.5-coder", 
             messages=messages,
-            tools=TOOL_DEFINITIONS,
-            stream=True,
+            tools=TOOL_DEFINITIONS, 
+            stream=True
         )
         return response
     except Exception as e:
-        print(f"[Model provider error: {e}]")
+        print(f"\n[Error communicating with local Ollama: {e}]")
         return None

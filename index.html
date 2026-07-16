@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Assistant</title>
+    <title>AI Voice Assistant</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body, html { 
@@ -72,6 +72,7 @@
         #response-stack::-webkit-scrollbar-thumb:hover { background: var(--accent-glow, #2DD4A8); }
 
         .response-card {
+            user-select: text !important;
             width: 280px; background: rgba(22, 23, 29, 0.75); border-radius: 6px;
             border-top: 2px solid var(--accent-card-border, #2DD4A8); padding: 15px; font-size: 13px; line-height: 1.5;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5); flex-shrink: 0;
@@ -80,6 +81,16 @@
         }
         .response-card .speaker-tag { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; color: var(--accent-card-border, #2DD4A8); transition: color 0.4s; }
         .response-card pre { font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; overflow-x: auto; margin-top: 6px; user-select: text; white-space: pre-wrap; }
+        .copy-btn {
+            display: inline-block; margin-top: 6px; padding: 3px 10px;
+            font-size: 9px; font-family: monospace; letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;
+            cursor: pointer; transition: color 0.2s, border-color 0.2s;
+            user-select: none;
+        }
+        .copy-btn:hover { color: #2DD4A8; border-color: #2DD4A8; }
+        .copy-btn.copied { color: #34C759; border-color: #34C759; }
 
         #control-dock {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 130px;
@@ -111,12 +122,21 @@
             box-shadow: 0 0 24px rgba(45, 212, 168, 0.5);
         }
         .mic-button.active svg { fill: var(--accent-glow, #2DD4A8); }
+        .mic-button.standby {
+            border-color: #3b82f6;
+            box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
+        }
+        .mic-button.standby svg { fill: #3b82f6; }
         .pulse-ring {
             position: absolute; top: 0; left: 0; width: 64px; height: 64px;
             border-radius: 50%; border: 2px solid var(--accent-glow, #2DD4A8); pointer-events: none;
             opacity: 0; transform: scale(1); border-color: var(--accent-glow, #2DD4A8);
         }
         .mic-button.active + .pulse-ring { animation: ringSpread 1.4s infinite cubic-bezier(0.16, 1, 0.3, 1); }
+        .mic-button.standby + .pulse-ring {
+            border-color: #3b82f6;
+            animation: ringSpread 2.2s infinite cubic-bezier(0.16, 1, 0.3, 1);
+        }
 
         .hint-text { font-size: 11px; font-family: monospace; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 0.08em; }
 
@@ -126,7 +146,7 @@
         @keyframes slideIn { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: translateX(0); } }
         @keyframes pulseGlow { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
-        /*  COUNCIL ORB DISPLAY  */
+        /* ── COUNCIL ORB DISPLAY ─────────────────────────────────── */
         #council-overlay {
             position: fixed; inset: 0; z-index: 100;
             background: rgba(8, 9, 14, 0.92);
@@ -373,7 +393,7 @@
             <!-- Chairman — center -->
             <div id="chairman-orb">
                 <div id="chairman-orb-inner">
-                    <span id="chairman-orb-icon"></span>
+                    <span id="chairman-orb-icon">★</span>
                 </div>
                 <div id="chairman-orb-label">Chairman</div>
             </div>
@@ -389,9 +409,12 @@
     </div>
 
     <header class="glass-panel">
-        <div class="wordmark">ASSISTANT<span>.</span></div>
+        <div style="display: flex; align-items: center;">
+            <div class="wordmark">HERMES<span>.</span></div>
+            <div id="clock-display" style="font-size: 12px; font-family: monospace; color: rgba(255,255,255,0.6); margin-left: 20px; letter-spacing: 0.05em;"></div>
+        </div>
         <div class="header-right">
-            <button class="ghost-btn" onclick="triggerMapModule()" title="Show system routing and agent layout">HOW ASSISTANT WORKS</button>
+            <button class="ghost-btn" onclick="triggerMapModule()" title="Show system routing and agent layout">How Chronos Works</button>
             <button class="ghost-btn" onclick="triggerAlertsModule()" title="Show server and connection status">SYSTEM HEALTH</button>
             <div class="status-container">
                 <span id="system-status-text">ONLINE</span>
@@ -401,13 +424,13 @@
 
     <div id="response-stack">
         <div class="response-card" id="welcome-card">
-            <div class="speaker-tag" id="welcome-speaker">Assistant</div>
-            Online and ready, User. Say "Hey Jarvis" to start talking, or type below.
+            <div class="speaker-tag">Chronos</div>
+            Online and ready, Aryan. Say "hey chronos" to start talking, or type below.
         </div>
     </div>
 
     <div id="activity-panel" class="glass-panel">
-        <div class="panel-toggle" onclick="togglePanel()"></div>
+        <div class="panel-toggle" onclick="togglePanel()">🗲</div>
         <div class="panel-content" id="panel-content-area">
             <div>
                 <div class="section-header">SESSION <span>#</span></div>
@@ -415,19 +438,19 @@
             </div>
             <div>
                 <div class="section-header">THINKING WITH <span id="scout-status">READY</span></div>
-                <div class="panel-entry" id="scout-entry" title="Which AI model or agent is being used right now">Waiting for your first message.</div>
+                <div class="panel-entry" id="scout-entry" title="Which AI model or agent Chronos is using right now">Waiting for your first message.</div>
             </div>
             <div>
                 <div class="section-header">MEMORY <span>LIVE</span></div>
-                <div class="panel-entry" id="flux-status" title="How much of the assistant's short-term memory is in use — resets each session">0 of 20 messages remembered</div>
+                <div class="panel-entry" id="flux-status" title="How much of Chronos's short-term memory is in use — resets each session">0 of 20 messages remembered</div>
             </div>
             <div>
                 <div class="section-header">LAST ROUTE <span>-</span></div>
-                <div class="panel-entry" id="last-route-entry" title="How the assistant decided to handle your last message">No requests yet.</div>
+                <div class="panel-entry" id="last-route-entry" title="How Chronos decided to handle your last message">No requests yet.</div>
             </div>
             <div>
                 <div class="section-header">MODE <span id="mode-indicator">NORMAL</span></div>
-                <div class="panel-entry" id="mode-entry" title="The assistant's current operating mode">All systems active.</div>
+                <div class="panel-entry" id="mode-entry" title="Chronos's current operating mode">All systems active.</div>
             </div>
         </div>
     </div>
@@ -447,36 +470,13 @@
                 <div class="pulse-ring"></div>
             </div>
         </div>
-        <div class="hint-text">SAY "HEY ASSISTANT" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
+        <div class="hint-text">SAY "hey chronos" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
     </div>
 
     <script src="/three.min.js"></script>
     <script>
-        // ── Config — must match config.py ───────────────────────────
-        const ASSISTANT_NAME = "Jarvis";   // Change to match config.py
-        const USER_NAME      = "User";     // Change to match config.py
-        // Wake words are auto-generated from ASSISTANT_NAME — no need to edit these.
-        const _n = ASSISTANT_NAME.toLowerCase();
-        const WAKE_WORDS = [
-            `hey ${_n}`, `hi ${_n}`, `wake up ${_n}`, `ok ${_n}`, `okay ${_n}`,
-            `${_n} wake up`, `${_n} are you there`, `${_n} i need you`,
-            `${_n} listen`, `listen ${_n}`
-        ];
-        // ─────────────────────────────────────────────────────────────────
-
-        window.onload = () => {
-            // Inject configured names into the welcome card
-            document.getElementById('welcome-speaker').textContent = ASSISTANT_NAME;
-            const welcomeText = document.getElementById('welcome-card').childNodes[2];
-            if (welcomeText) welcomeText.textContent =
-                `Online and ready, ${USER_NAME}. Say "${WAKE_WORDS[0]}" to start talking, or type below.`;
-            // Update hint bar
-            const hintEl = document.querySelector('.hint-text');
-            if (hintEl) hintEl.textContent =
-                `SAY "${WAKE_WORDS[0].toUpperCase()}" TO START TALKING — "TURN OFF VOICE MODE" TO STOP`;
-            initSpaceScene();
-        };
-
+        const ASSISTANT_NAME = "Chronos";
+        const USER_NAME = "Aryan";
         let scene, camera, renderer, starParticles, orbMesh, orbGlow;
         let recognition;
         
@@ -485,7 +485,7 @@
         let isServerProcessing = false;
         let isSpeaking = false;
 
-        // Stop audio only when the tab is closed — not when switching to another tab.
+        // Stop Chronos audio only when the tab is closed — not when switching to another tab.
         // beforeunload fires on close/navigate-away; pagehide is the mobile equivalent.
         window.addEventListener('beforeunload', () => {
             fetch('/api/stop_audio', { method: 'POST' }).catch(() => {});
@@ -535,7 +535,7 @@
 
                 // Phrases that signal a question mid-sentence
                 const questionPhrases = ["can you", "could you", "would you", "should i",
-                    "do you", `does ${ASSISTANT_NAME.toLowerCase()}`, "is there", "are there", "is it", "is this",
+                    "do you", "does chronos", "is there", "are there", "is it", "is this",
                     "what is", "what are", "what's", "how do", "how does", "how can",
                     "how much", "how many", "why is", "why does", "why are",
                     "tell me", "explain", "show me"];
@@ -544,7 +544,7 @@
                 const isQuestion = questionStarters.includes(firstWord) ||
                     questionPhrases.some(p => lowerCorrected.startsWith(p)) ||
                     lowerCorrected.includes("?") ||
-                    (firstWord === ASSISTANT_NAME.toLowerCase() && questionStarters.includes(secondWord));
+                    (firstWord === ASSISTANT_NAME && questionStarters.includes(secondWord));
 
                 // Exclamation detection
                 const exclamationWords = ["stop", "yes", "no", "cancel", "abort",
@@ -577,11 +577,55 @@
             starParticles = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xffffff, size: 0.02, transparent: true, opacity: 0.8 }));
             scene.add(starParticles);
 
-            orbMesh = new THREE.Mesh(new THREE.SphereGeometry(0.6, 64, 64), new THREE.MeshBasicMaterial({ color: 0x2DD4A8 }));
+            // ── Electron Cloud Particle Orb ──────────────────────────
+            // Replaces the solid sphere with a 3D particle system
+            // that forms an atom-like electron cloud shape.
+            // The core glows, outer particles orbit in randomised paths.
+            const PARTICLE_COUNT  = 1800;
+            const orbGeometry     = new THREE.BufferGeometry();
+            const orbPositions    = new Float32Array(PARTICLE_COUNT * 3);
+            const orbSpeeds       = new Float32Array(PARTICLE_COUNT);
+            const orbRadii        = new Float32Array(PARTICLE_COUNT);
+            const orbPhases       = new Float32Array(PARTICLE_COUNT);
+            const orbInclinations = new Float32Array(PARTICLE_COUNT);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                // Distribute particles in shells like an electron cloud
+                const shell  = Math.random() < 0.3 ? 0.25 : Math.random() < 0.6 ? 0.55 : 0.85;
+                const radius = shell + (Math.random() - 0.5) * 0.18;
+                orbRadii[i]        = radius;
+                orbPhases[i]       = Math.random() * Math.PI * 2;
+                orbInclinations[i] = Math.acos(2 * Math.random() - 1);
+                orbSpeeds[i]       = 0.3 + Math.random() * 0.9;
+                orbPositions[i * 3]     = 0;
+                orbPositions[i * 3 + 1] = 0;
+                orbPositions[i * 3 + 2] = 0;
+            }
+
+            orbGeometry.setAttribute('position', new THREE.BufferAttribute(orbPositions, 3));
+            window._orbPositions    = orbPositions;
+            window._orbSpeeds       = orbSpeeds;
+            window._orbRadii        = orbRadii;
+            window._orbPhases       = orbPhases;
+            window._orbInclinations = orbInclinations;
+            window._particleCount   = PARTICLE_COUNT;
+
+            orbMesh = new THREE.Points(orbGeometry, new THREE.PointsMaterial({
+                color:       0x2DD4A8,
+                size:        0.028,
+                transparent: true,
+                opacity:     0.85,
+                sizeAttenuation: true,
+            }));
             scene.add(orbMesh);
 
-            orbGlow = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), new THREE.MeshBasicMaterial({ color: 0x2DD4A8, transparent: true, opacity: 0.25, side: THREE.BackSide }));
+            // Soft core glow at the centre
+            orbGlow = new THREE.Mesh(
+                new THREE.SphereGeometry(0.18, 24, 24),
+                new THREE.MeshBasicMaterial({ color: 0x2DD4A8, transparent: true, opacity: 0.55 })
+            );
             scene.add(orbGlow);
+            // ─────────────────────────────────────────────────────────
 
             window.addEventListener('resize', onWindowResize);
             document.addEventListener('keydown', handleGlobalKeydown);
@@ -600,7 +644,7 @@
                 audioAnalyser.fftSize = 256;
                 audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
                 sourceNode.connect(audioAnalyser);
-            }).catch(() => { console.log(" Acoustic analyzer standby."); });
+            }).catch(() => { console.log("⚠️ Acoustic analyzer standby."); });
         }
 
         function animateLoop() {
@@ -617,9 +661,34 @@
                 liveMicrophoneAmplitude += (0.0 - liveMicrophoneAmplitude) * 0.1;
             }
 
-            let finalScalingFactor = 1.0 + breathingFactor + (liveMicrophoneAmplitude * 1.2);
-            if (orbMesh) orbMesh.scale.set(finalScalingFactor, finalScalingFactor, finalScalingFactor);
-            if (orbGlow) orbGlow.scale.set(finalScalingFactor * 1.25, finalScalingFactor * 1.25, finalScalingFactor * 1.25);
+            let scaleFactor = 1.0 + breathingFactor + (liveMicrophoneAmplitude * 0.6);
+
+            // Animate each electron cloud particle along its orbital path
+            if (orbMesh && window._orbPositions) {
+                const pos   = window._orbPositions;
+                const count = window._particleCount;
+                for (let i = 0; i < count; i++) {
+                    const r     = window._orbRadii[i] * scaleFactor;
+                    const speed = window._orbSpeeds[i];
+                    const phase = window._orbPhases[i] + time * speed;
+                    const incl  = window._orbInclinations[i] + time * speed * 0.15;
+                    pos[i * 3]     = r * Math.sin(incl) * Math.cos(phase);
+                    pos[i * 3 + 1] = r * Math.sin(incl) * Math.sin(phase);
+                    pos[i * 3 + 2] = r * Math.cos(incl);
+                }
+                orbMesh.geometry.attributes.position.needsUpdate = true;
+                // Pulse particle colour with mic amplitude
+                const bright = 0.5 + liveMicrophoneAmplitude * 1.5;
+                orbMesh.material.opacity = Math.min(0.95, 0.7 + liveMicrophoneAmplitude * 0.5);
+            }
+
+            // Core glow pulses with mic
+            if (orbGlow) {
+                const gs = 0.18 + liveMicrophoneAmplitude * 0.25 + Math.sin(time * 2.0) * 0.03;
+                orbGlow.scale.set(gs / 0.18, gs / 0.18, gs / 0.18);
+                orbGlow.material.opacity = 0.45 + liveMicrophoneAmplitude * 0.4;
+            }
+
             if (starParticles) starParticles.rotation.y = time * 0.02;
             renderer.render(scene, camera);
         }
@@ -651,65 +720,80 @@
                 const transcript = autoCorrectSpeechAndPunctuate(rawTranscript);
                 const transcriptLower = transcript.toLowerCase();
                 
-                console.log(" [Voice Core] Intercepted Raw Audio Token:", transcript);
+                console.log("🛰️ [Voice Core] Intercepted Raw Audio Token:", transcript);
+
+                // Isolate command by stripping wake word first
+                const nameKey = ASSISTANT_NAME.toLowerCase();
+                const wakePhrases = [
+                    `hey ${nameKey}`, `hi ${nameKey}`, `ok ${nameKey}`, `okay ${nameKey}`, nameKey
+                ];
+                // Support phonetic 'k' variant if configured name is 'chronos'
+                if (nameKey === 'chronos') {
+                    wakePhrases.push("hey kronos", "hi kronos", "ok kronos", "okay kronos", "kronos");
+                }
+                let matchedWake = "";
+                for (let w of wakePhrases) {
+                    if (transcriptLower.includes(w)) {
+                        if (w.length > matchedWake.length) {
+                            matchedWake = w;
+                        }
+                    }
+                }
+
+                let command = transcript;
+                if (matchedWake) {
+                    let idx = transcriptLower.indexOf(matchedWake);
+                    command = transcript.substring(idx + matchedWake.length).trim();
+                }
+                command = command.replace(/^[.,\s!?]+|[.,\s!?]+$/g, "").trim();
+                const commandLower = command.toLowerCase();
+
+                // Check for voice standby/shutdown commands (only if it matches the complete isolated command)
+                const voiceOffCommands = [
+                    "turn off voice mode", "turn off the microphone", "microphone off", 
+                    "voice mode off", "deactivate voice", "text mode only", "turn microphone off",
+                    "standby", "go to standby", "wait", "hold on"
+                ];
+
+                if (voiceOffCommands.includes(commandLower)) {
+                    switchToAmbientMode();
+                    postCommandToBackend("turn off voice mode", 'voice');
+                    return;
+                }
 
                 if (isListeningMode) {
-                    // Voice-off commands
-                    if (transcriptLower.includes("microphone off") ||
-                        transcriptLower.includes("text mode only") ||
-                        transcriptLower.includes("turn microphone off") ||
-                        transcriptLower.includes("turn off voice mode") ||
-                        transcriptLower.includes("voice mode off")) {
-                        switchToAmbientMode();
-                        postCommandToBackend("turn off voice mode", 'voice');
+                    postCommandToBackend(transcript, 'voice');
+                } else if (matchedWake) {
+                    // Activate active listening for a flowing conversation!
+                    switchToActiveListeningMode();
+                    // If they just said the wake word with nothing else, trigger the ping response
+                    if (!command) {
+                        speakWakePing();
                         return;
                     }
-                    postCommandToBackend(transcript, 'voice');
-                }
-                else {
-                    // All wake phrases that activate voice mode
-                    const functionalTriggers = [
-                        ...WAKE_WORDS,
-                        "activate voice mode", "turn on microphone", "turn microphone on",
-                        "voice mode on", "voice mode", "start listening"
-                    ];
-                    let targetTriggerMatch = null;
-                    for (let trigger of functionalTriggers) {
-                        if (transcriptLower.includes(trigger)) {
-                            targetTriggerMatch = trigger;
-                            break;
-                        }
-                    }
-
-                    if (targetTriggerMatch) {
-                        console.log(" [Voice Core] Wake verification matching anchor:", targetTriggerMatch);
-                        switchToActiveListeningMode();
-                        let triggerPosition = transcriptLower.indexOf(targetTriggerMatch) + targetTriggerMatch.length;
-                        let isolatedTrailingCommand = transcript.substring(triggerPosition).trim();
-                        
-                        if (isolatedTrailingCommand.length > 0) {
-                            postCommandToBackend(autoCorrectSpeechAndPunctuate(isolatedTrailingCommand), 'voice');
-                        } else {
-                            appendResponseCard(ASSISTANT_NAME, `Listening. Go ahead, ${USER_NAME}.`);
-                        }
-                    }
+                    postCommandToBackend(command, 'voice');
                 }
             };
 
-            recognition.onerror = (e) => { console.warn(" [Voice Core] Tracking exception state ignored."); };
+            recognition.onerror = (e) => { console.warn("⚠️ [Voice Core] Tracking exception state ignored."); };
             recognition.onend = () => { if (shouldRunSpeechEngine && !isServerProcessing) { try { recognition.start(); } catch(err) {} } };
 
-            if (shouldRunSpeechEngine) { try { recognition.start(); } catch(e) {} }
+            if (shouldRunSpeechEngine) {
+                try { recognition.start(); } catch(e) {}
+                if (!isListeningMode) switchToAmbientMode();
+            }
         }
 
         function switchToActiveListeningMode() {
             shouldRunSpeechEngine = true;
             isListeningMode = true;
             if (audioContext && audioContext.state === 'suspended') audioContext.resume();
-            
             const btn = document.getElementById('master-mic-btn');
             const svgIcon = document.getElementById('mic-icon-svg');
-            if (btn) btn.classList.add('active');
+            if (btn) {
+                btn.classList.remove('standby');
+                btn.classList.add('active');
+            }
             updateSystemUIState("listening");
             if (svgIcon) svgIcon.innerHTML = `<rect x="6" y="6" width="12" height="12"/>`;
         }
@@ -719,14 +803,19 @@
             shouldRunSpeechEngine = true;
             const btn = document.getElementById('master-mic-btn');
             const svgIcon = document.getElementById('mic-icon-svg');
-            if (btn) btn.classList.remove('active');
+            if (btn) {
+                btn.classList.remove('active');
+                btn.classList.add('standby');
+            }
             updateSystemUIState("idle");
             if (svgIcon) svgIcon.innerHTML = `<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>`;
         }
 
         function toggleVoiceCapture() {
-            if (!isListeningMode) switchToActiveListeningMode();
-            else {
+            if (!isListeningMode) {
+                switchToActiveListeningMode();
+                try { recognition.start(); } catch(e) {}
+            } else {
                 switchToAmbientMode();
                 postCommandToBackend("turn off voice mode", 'voice');
             }
@@ -752,7 +841,15 @@
         function postCommandToBackend(payloadText, source) {
             isServerProcessing = true;
             updateSystemUIState("processing");
-            appendResponseCard(source === 'voice' ? "User (Voice)" : "User (Keyboard)", payloadText);
+            if (typeof payloadText === 'string') {
+                const pattern = ASSISTANT_NAME.toLowerCase() === 'chronos'
+                    ? "\\b(chronos|kronos)\\b"
+                    : "\\b" + ASSISTANT_NAME + "\\b";
+                const regex = new RegExp(pattern, 'gi');
+                payloadText = payloadText.replace(regex, ASSISTANT_NAME.toUpperCase());
+            }
+            let displayPayload = payloadText;
+            appendResponseCard(source === 'voice' ? `Aryan (Voice)` : `Aryan (Keyboard)`, displayPayload);
 
             document.getElementById('scout-status').innerText = "THINKING";
             document.getElementById('scout-entry').innerText = "Routing transaction package across local array nodes...";
@@ -791,7 +888,7 @@
                         focus:     ['FOCUS',     'Proactive interruptions blocked.'],
                         stealth:   ['STEALTH',   'No audio output — text only.'],
                         ghost:     ['GHOST',     'Nothing being logged this session.'],
-                        lockdown:  ['LOCKDOWN',  'Only responding to User.'],
+                        lockdown:  ['LOCKDOWN',  'Only responding to Aryan.'],
                         red_alert: ['RED ALERT', 'Every action requires confirmation.'],
                         standdown: ['STAND DOWN','Background activity paused.'],
                     };
@@ -803,7 +900,7 @@
                 if (data.type === "wakeup") isListeningMode = true;
                 if (data.type === "shutdown") isListeningMode = false;
 
-                //  DUAL-LAYER FRONTEND NORMALIZER MATRIX FOR 6-SEAT BOARDROOM
+                // 🛠️ DUAL-LAYER FRONTEND NORMALIZER MATRIX FOR 6-SEAT BOARDROOM
                 if (data.type === 'council' || (data.response && typeof data.response === 'object')) {
                     let debate = data.response;
                     
@@ -986,14 +1083,61 @@
                 if (isListeningMode) switchToActiveListeningMode();
                 else switchToAmbientMode();
 
-                if (shouldRunSpeechEngine) {
-                    setTimeout(() => {
-                        if (!isServerProcessing && shouldRunSpeechEngine) {
-                            try { recognition.start(); } catch(e) {}
-                        }
-                    }, 1000); 
-                }
+                resumeListeningWhenDoneSpeaking();
             }
+        }
+
+        // Polls /api/is_speaking and re-arms the mic the moment the assistant
+        // finishes talking. Shared by normal replies and the wake-word ping,
+        // so the mic never stays muted longer than the audio actually plays.
+        function resumeListeningWhenDoneSpeaking() {
+            if (!shouldRunSpeechEngine) return;
+            let failedAttempts = 0;
+            const checkAudioState = async () => {
+                if (isServerProcessing) return; // Wait for server to finish first
+                try {
+                    const res = await fetch('/api/is_speaking');
+                    const data = await res.json();
+                    failedAttempts = 0;
+                    if (data.speaking) {
+                        if (recognition) { try { recognition.stop(); } catch(e) {} }
+                        updateSystemUIState("muted");
+                        setTimeout(checkAudioState, 300); // Check again in 300ms
+                    } else if (shouldRunSpeechEngine) {
+                        if (isListeningMode) {
+                            switchToActiveListeningMode();
+                        } else {
+                            switchToAmbientMode();
+                        }
+                        try { recognition.start(); } catch(e) {}
+                    }
+                } catch (e) {
+                    failedAttempts++;
+                    if (failedAttempts >= 3) {
+                        if (shouldRunSpeechEngine) { try { recognition.start(); } catch(e2) {} }
+                        return;
+                    }
+                    setTimeout(checkAudioState, 1000);
+                }
+            };
+            setTimeout(checkAudioState, 100);
+        }
+
+        // Instant local acknowledgement when only the wake word is spoken —
+        // no backend/LLM round trip, just a TTS ping so you know it's ready.
+        async function speakWakePing() {
+            isServerProcessing = false;
+            if (recognition) { try { recognition.stop(); } catch(e) {} }
+            updateSystemUIState("muted");
+            try {
+                await fetch('/api/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: "Yes, sir?" })
+                });
+            } catch (e) { /* audio pipeline offline — mic will still re-arm below */ }
+            if (isListeningMode) updateSystemUIState("listening");
+            resumeListeningWhenDoneSpeaking();
         }
 
         function closeCouncilOverlay() {
@@ -1016,17 +1160,17 @@
             const card = document.createElement('div');
             card.className = 'response-card';
             card.innerHTML = `
-                <div class="speaker-tag">How ${ASSISTANT_NAME} Works</div>
+                <div class="speaker-tag">How Chronos Works</div>
                 <div style="font-family: monospace; font-size: 11px; line-height: 1.8; margin-top: 8px;">
-                    Every message you send goes through Hermes — ${ASSISTANT_NAME}'s routing brain.<br>
+                    Every message you send goes through Hermes — Chronos's routing brain.<br>
                     Hermes reads your message and decides which engine should handle it:<br><br>
-                    <span style="color:#2DD4A8;">&#9654;</span> <b>Casual chat</b> &rarr; Fast model — replies in seconds<br>
+                    <span style="color:#2DD4A8;">&#9654;</span> <b>Casual chat</b> &rarr; Fast model (qwen3:1.7b) — replies in seconds<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Web search / live info</b> &rarr; Browser agent — opens a real browser tab invisibly<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Desktop commands</b> &rarr; Desktop agent — controls apps and files on your PC<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Brainstorming / decisions</b> &rarr; Council — 5 specialist AIs debate simultaneously,<br>
                     &nbsp;&nbsp;&nbsp;then a Chairman gives one clear verdict<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Coding</b> &rarr; Coding agent (offline until GPU server arrives)<br><br>
-                    Voice: your microphone is muted while ${ASSISTANT_NAME} speaks so it never hears itself.
+                    Voice: your microphone is muted while Chronos speaks so it never hears itself.
                 </div>`;
             stack.appendChild(card);
             stack.scrollTop = stack.scrollHeight;
@@ -1075,17 +1219,82 @@
 
         function appendResponseCard(speaker, message, duration = null) {
             const stack = document.getElementById('response-stack');
-            const card = document.createElement('div');
+            const card  = document.createElement('div');
             card.className = 'response-card';
-            let durationMarkup = duration ? `<div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace; letter-spacing: 0.05em;">LATENCY: ${duration}s</div>` : '';
-            card.innerHTML = `<div class="speaker-tag">${speaker}</div><div>${message}</div>${durationMarkup}`;
+            const durationMarkup = duration
+                ? `<div style="font-size:10px;opacity:0.4;text-align:right;margin-top:6px;font-family:monospace;letter-spacing:0.05em;">LATENCY: ${duration}s</div>`
+                : '';
+            
+            let formattedMessage = message;
+            if (typeof message === 'string' && message.length > 500) {
+                const preview = message.substring(0, 300);
+                const remaining = message.substring(300);
+                const uniqueId = 'collapse-' + Math.random().toString(36).substring(2, 9);
+                formattedMessage = `
+                    <span>${preview}</span><span id="${uniqueId}" style="display:none">${remaining}</span>
+                    <a href="#" onclick="event.preventDefault(); toggleTextCollapse(this, '${uniqueId}')" style="color:var(--accent-glow); margin-left: 5px; font-weight: bold; text-decoration: none; font-size: 10px; letter-spacing: 0.05em; display: inline-block; border: 1px solid var(--accent-glow); padding: 2px 6px; border-radius: 3px; margin-top: 5px;">SHOW MORE</a>
+                `;
+            }
+
+            const plainText = (typeof message === 'string')
+                ? message.replace(/<[^>]*>/g, '').replace(/```[a-z]*\n?/g, '')
+                : JSON.stringify(message);
+
+            card.innerHTML = `
+                <div class="speaker-tag">${speaker.toUpperCase()}</div>
+                <div style="user-select:text; line-height: 1.6;">${formattedMessage}</div>
+                ${durationMarkup}`;
             stack.appendChild(card);
-            stack.scrollTop = stack.scrollHeight; 
+            stack.scrollTop = stack.scrollHeight;
+        }
+
+        function toggleTextCollapse(link, targetId) {
+            const target = document.getElementById(targetId);
+            if (target.style.display === 'none') {
+                target.style.display = 'inline';
+                link.innerText = 'SHOW LESS';
+            } else {
+                target.style.display = 'none';
+                link.innerText = 'SHOW MORE';
+            }
+        }
+
+        function copyCardText(btn, text) {
+            navigator.clipboard.writeText(text).then(() => {
+                btn.innerText = 'COPIED';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerText = 'COPY';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                btn.innerText = 'COPIED';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.innerText = 'COPY'; btn.classList.remove('copied'); }, 2000);
+            });
         }
 
         function togglePanel() { document.getElementById('activity-panel').classList.toggle('collapsed'); }
 
-        // window.onload is defined at the top of this script block
+        window.onload = initSpaceScene;
+        // Initialize clock
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateString = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            document.getElementById('clock-display').innerText = `${dateString} | ${timeString}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/api/stop_audio');
+        });
     </script>
 </body>
 </html>

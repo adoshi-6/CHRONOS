@@ -5,8 +5,7 @@ import re
 # MODEL SELECTION
 # Set this to the model you have pulled in Ollama.
 # ==================================================
-from config import SMART_MODEL
-LOCAL_MODEL = SMART_MODEL
+LOCAL_MODEL = "qwen3:4b"   # Updated — qwen2.5-coder removed, use smart model
 
 
 def _chat(prompt_system: str, prompt_user: str) -> str:
