@@ -5,7 +5,7 @@ from audio_provider import speak_text, listen_to_user
 from council import run_council_debate
 import ollama
 
-from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_TRIGGERS, OLLAMA_SERVER_URL
+from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_TRIGGERS, OLLAMA_SERVER_URL, SYSTEM_PROMPT
 
 client = ollama.Client(host=OLLAMA_SERVER_URL)
 
@@ -42,7 +42,7 @@ def handle_standard_chat(user_query: str):
             model=active_model,
             messages=[
                 {"role": "system",
-                 "content": f"You are {ASSISTANT_NAME}, a warm, direct, and brief personal assistant. Always address {USER_NAME} as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses.."},
+                 "content": SYSTEM_PROMPT.format(ASSISTANT_NAME=ASSISTANT_NAME, USER_NAME=USER_NAME)},
                 {"role": "user", "content": user_query},
             ]
         )

@@ -1,7 +1,8 @@
 from config import (ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL,
                    DESKTOP_PATH, COUNCIL_TRIGGERS, CODE_WORDS,
                    PROTECTED_ACTIONS, UNLOCK_PHRASES, PIN_LENGTH,
-                   VOICE_TAG, WAKE_WORD, BACKGROUND_COLOR, OLLAMA_SERVER_URL)
+                   VOICE_TAG, WAKE_WORD, BACKGROUND_COLOR, OLLAMA_SERVER_URL,
+                   SYSTEM_PROMPT)
 import ollama
 from flask import Flask, request, jsonify
 import hashlib
@@ -1630,12 +1631,7 @@ def orchestrate_command_routing():
         print(f" [Hermes]: Conversational route -> {FAST_MODEL}")
         lessons_ctx = build_lessons_context()
         chat_system = (
-            f"You are {ASSISTANT_NAME}, {USER_NAME}'s personal AI assistant. "
-            "You have full capabilities to search the internet/web (via the browser harness) and execute commands/open applications on the user's desktop. Never claim that you cannot access the internet, browse the web, or control the desktop. "
-            "Never use emojis. Never start with filler phrases like Certainly or Great question. "
-            "Speak like a sharp, trusted friend — warm, plain-spoken, and brief. "
-            f"Keep responses to 1 or 2 sentences unless {USER_NAME} asks for more detail. "
-            "If you do not know something, say so plainly."
+            SYSTEM_PROMPT.format(ASSISTANT_NAME=ASSISTANT_NAME, USER_NAME=USER_NAME)
             + lessons_ctx
         )
         messages = [{"role": "system", "content": chat_system}]
