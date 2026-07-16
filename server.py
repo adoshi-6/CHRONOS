@@ -328,7 +328,7 @@ def build_lessons_context() -> str:
 # SHARED THREAD POOL — all parallel council agents use this
 # Limits total concurrent Ollama calls so the machine doesn't thrash
 # ============================================================
-COUNCIL_EXECUTOR = ThreadPoolExecutor(max_workers=5)
+COUNCIL_EXECUTOR = ThreadPoolExecutor(max_workers=6)
 
 # ============================================================
 # TIMEOUTS (seconds)
@@ -868,7 +868,7 @@ def classify_command_route(command: str) -> str:
         print(f"?? [Routing classification error]: {e}")
         return 'conversational'
 # ─────────────────────────────────────────────────────────────
-# PARALLEL COUNCIL — all 5 agents fire simultaneously
+# PARALLEL COUNCIL — all 6 agents fire simultaneously
 # Chairman runs after they all finish (needs their output)
 # ─────────────────────────────────────────────────────────────
 
@@ -916,11 +916,20 @@ COUNCIL_AGENTS = {
         ),
         "prompt": "What is the immediate next action to take? {idea}",
     },
+    "rainmaker": {
+        "system": (
+            "You are The Rainmaker on CHRONOS's advisory council. "
+            "You think like an investor, entrepreneur, and dealmaker. "
+            "Evaluate every idea through the lens of revenue, ROI, market positioning, and monetization potential. "
+            "Maximum 2 sentences. No preamble."
+        ),
+        "prompt": "Evaluate the financial upside, monetization strategy, and investment-worthiness: {idea}",
+    },
 }
 
 CHAIRMAN_SYSTEM = (
     "You are The Chairman of CHRONOS's advisory council. "
-    "You have received independent briefs from 5 specialist agents. "
+    "You have received independent briefs from 6 specialist agents. "
     "Synthesize them into one clear, unified recommendation — the single best path forward. "
     "Be decisive. No hedging. Maximum 3 sentences."
 )
@@ -937,15 +946,15 @@ def _run_agent(seat_name: str, idea: str) -> tuple[str, str]:
 
 def run_parallel_council(idea: str) -> dict:
     """
-    Fire all 5 agents simultaneously using the shared thread pool.
+    Fire all 6 agents simultaneously using the shared thread pool.
     Each agent has AGENT_TIMEOUT seconds; slow ones get a fallback message.
-    Chairman runs after all 5 complete (needs their output to synthesize).
-    Total wall time ≈ slowest single agent + chairman, not sum of all 6.
+    Chairman runs after all 6 complete (needs their output to synthesize).
+    Total wall time ≈ slowest single agent + chairman, not sum of all 7.
     """
-    print(f"\n👥 [Hermes Council]: Firing 5 agents in parallel via {SMART_MODEL}...")
+    print(f"\n👥 [Hermes Council]: Firing 6 agents in parallel via {SMART_MODEL}...")
     results = {}
 
-    # Submit all 5 agents at once
+    # Submit all 6 agents at once
     futures = {
         COUNCIL_EXECUTOR.submit(_run_agent, seat, idea): seat
         for seat in COUNCIL_AGENTS
@@ -972,7 +981,8 @@ def run_parallel_council(idea: str) -> dict:
         f"First Principles: {results.get('first_principles', 'N/A')}\n\n"
         f"Expansionist: {results.get('expansionist', 'N/A')}\n\n"
         f"Outsider: {results.get('outsider', 'N/A')}\n\n"
-        f"Executor: {results.get('executor', 'N/A')}"
+        f"Executor: {results.get('executor', 'N/A')}\n\n"
+        f"Rainmaker: {results.get('rainmaker', 'N/A')}"
     )
     results["chairman"] = ollama_call(SMART_MODEL, CHAIRMAN_SYSTEM, chairman_input)
     print("  ✅ Chairman complete.\n")
@@ -1535,7 +1545,7 @@ def orchestrate_command_routing():
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE A — PARALLEL COUNCIL
-    # All 5 agents fire at the same time. Total wait ≈ slowest single agent.
+    # All 6 agents fire at the same time. Total wait ≈ slowest single agent.
     # ══════════════════════════════════════════════════════════════════════
     if route == "council":
         print(f"👥 [Hermes]: Parallel council assembling...")
@@ -1544,7 +1554,7 @@ def orchestrate_command_routing():
             return jsonify({
                 "response":          debate_packet,
                 "type":              "council",
-                "model":             "hermes-parallel-6",
+                "model":             "hermes-parallel-7",
                 "interaction_count": interaction_session_counter,
                 "context_loaded":    context_string,
                 "execution_time":    round(time.time() - start_time, 2),
@@ -1777,6 +1787,6 @@ if __name__ == '__main__':
     print(f"  Smart:  {SMART_MODEL}")
     print(f"  Coding: {CODING_MODEL}")
     print(f"  Desktop: {DESKTOP_PATH}")
-    print("  Council: 5 parallel agents + Chairman")
+    print("  Council: 6 parallel agents + Chairman")
     print("="*60 + "\n")
     app.run(host='0.0.0.0', port=5000, debug=False)
