@@ -1,7 +1,8 @@
 from config import (ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL,
                    DESKTOP_PATH, COUNCIL_TRIGGERS, CODE_WORDS,
                    PROTECTED_ACTIONS, UNLOCK_PHRASES, PIN_LENGTH,
-                   VOICE_TAG, WAKE_WORD, BACKGROUND_COLOR)
+                   VOICE_TAG, WAKE_WORD, BACKGROUND_COLOR, OLLAMA_SERVER_URL)
+import ollama
 from flask import Flask, request, jsonify
 import hashlib
 import pyautogui   # keyboard and mouse control for desktop typing
@@ -22,6 +23,7 @@ from playwright.sync_api import sync_playwright
 from audio_provider import speak_text, is_speaking
 
 app = Flask(__name__)
+client = ollama.Client(host=OLLAMA_SERVER_URL)
 
 # ============================================================
 # MODEL ANCHORS
@@ -332,7 +334,7 @@ def stream_and_speak_sentences(messages: list, model: str, speak: bool = False) 
     Accumulates and returns the full text response.
     """
     try:
-        response_stream = ollama.chat(model=model, messages=messages, stream=True)
+        response_stream = client.chat(model=model, messages=messages, stream=True)
     except Exception as e:
         print(f"❌ [Streaming failure]: {e}")
         raise e
@@ -400,7 +402,7 @@ def ollama_call(model: str, system: str, user: str) -> str:
     Returns a plain string — never raises.
     """
     try:
-        res = ollama.chat(model=model, messages=[
+        res = client.chat(model=model, messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user},
         ])
@@ -418,7 +420,7 @@ def ollama_call_coding(system: str, user: str) -> str:
     """
     try:
         print(f"[Coding Model]: Loading {CODING_MODEL} into memory...")
-        res = ollama.chat(
+        res = client.chat(
             model=CODING_MODEL,
             messages=[
                 {"role": "system", "content": system},

@@ -6,6 +6,11 @@
 # Every other file in the project reads from here.
 # =============================================================
 
+# ── Server URL ────────────────────────────────────────────────
+# Point this to your Ollama server instance (local or remote).
+OLLAMA_SERVER_URL = "http://localhost:11434"
+
+
 
 # ── Identity ──────────────────────────────────────────────────
 # The name the assistant calls itself and responds to.

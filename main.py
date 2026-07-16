@@ -5,7 +5,9 @@ from audio_provider import speak_text, listen_to_user
 from council import run_council_debate
 import ollama
 
-from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_TRIGGERS
+from config import ASSISTANT_NAME, USER_NAME, FAST_MODEL, SMART_MODEL, COUNCIL_TRIGGERS, OLLAMA_SERVER_URL
+
+client = ollama.Client(host=OLLAMA_SERVER_URL)
 
 
 def should_trigger_council(user_input: str) -> bool:
@@ -36,7 +38,7 @@ def handle_standard_chat(user_query: str):
         print(f"[Fast model: {FAST_MODEL}]")
 
     try:
-        response = ollama.chat(
+        response = client.chat(
             model=active_model,
             messages=[
                 {"role": "system",
