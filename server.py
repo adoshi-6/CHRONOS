@@ -872,67 +872,16 @@ def classify_command_route(command: str) -> str:
 # Chairman runs after they all finish (needs their output)
 # ─────────────────────────────────────────────────────────────
 
-COUNCIL_AGENTS = {
-    "contrarian": {
-        "system": (
-            "You are The Contrarian on CHRONOS's advisory council. "
-            "Your job: identify every critical risk, flaw, hidden cost, and reason this idea will fail. "
-            "Be direct and ruthless. No fluff. Maximum 2 sentences. "
-            "Do not begin with 'As a contrarian' or similar preamble."
-        ),
-        "prompt": "Identify all vulnerabilities and failure points: {idea}",
-    },
-    "first_principles": {
-        "system": (
-            "You are the First Principles Thinker on CHRONOS's advisory council. "
-            "Strip every assumption and analogy. Rebuild the core logic from raw axioms only. "
-            "Maximum 2 sentences. No preamble."
-        ),
-        "prompt": "Deconstruct this from first principles and rebuild: {idea}",
-    },
-    "expansionist": {
-        "system": (
-            "You are The Expansionist on CHRONOS's advisory council. "
-            "Find the biggest hidden upside, scalability plays, and opportunities being missed. "
-            "Maximum 2 sentences. No preamble."
-        ),
-        "prompt": "Identify maximum upside and scale opportunities: {idea}",
-    },
-    "outsider": {
-        "system": (
-            "You are The Outsider on CHRONOS's advisory council. "
-            "Evaluate with complete objectivity. No jargon, no emotional attachment. "
-            "Would this make sense to a smart person with no industry knowledge? "
-            "Maximum 2 sentences. No preamble."
-        ),
-        "prompt": "Evaluate this neutrally as a complete outsider: {idea}",
-    },
-    "executor": {
-        "system": (
-            "You are The Executor on CHRONOS's advisory council. "
-            "Ignore theory. Focus only on execution. "
-            "What is the single most concrete, actionable next step to take right now? "
-            "Maximum 2 sentences. No preamble."
-        ),
-        "prompt": "What is the immediate next action to take? {idea}",
-    },
-    "rainmaker": {
-        "system": (
-            "You are The Rainmaker on CHRONOS's advisory council. "
-            "You think like an investor, entrepreneur, and dealmaker. "
-            "Evaluate every idea through the lens of revenue, ROI, market positioning, and monetization potential. "
-            "Maximum 2 sentences. No preamble."
-        ),
-        "prompt": "Evaluate the financial upside, monetization strategy, and investment-worthiness: {idea}",
-    },
-}
+import json
+import os
 
-CHAIRMAN_SYSTEM = (
-    "You are The Chairman of CHRONOS's advisory council. "
-    "You have received independent briefs from 6 specialist agents. "
-    "Synthesize them into one clear, unified recommendation — the single best path forward. "
-    "Be decisive. No hedging. Maximum 3 sentences."
-)
+_council_config_path = os.path.join(os.path.dirname(__file__), "council_config.json")
+with open(_council_config_path, "r", encoding="utf-8") as f:
+    _council_data = json.load(f)
+
+# The first 6 are workers, the last is the chairman
+COUNCIL_AGENTS = {k: v for k, v in _council_data.items() if k != "chairman"}
+CHAIRMAN_SYSTEM = _council_data.get("chairman", {}).get("system", "")
 
 
 def _run_agent(seat_name: str, idea: str) -> tuple[str, str]:

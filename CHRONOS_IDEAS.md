@@ -135,6 +135,16 @@
 | `Graphify-Labs/graphify` | ✅ V1.3 | Structural knowledge graph of CHRONOS codebase |
 | `asgeirtj/system_prompts_leaks` | ✅✅ Now | Read Fable 5 + frontier prompt patterns |
 | `Fable 6 Setup (BALL)` | ✅✅ Now | 4-part Claude Code optimization blueprint. Steal: global/project-level prompt configurations (`CLAUDE.md`), auto-generation of custom MCP servers when tool is missing, sub-agent fanning, and tool lifecycle check hooks. |
+| `AhmadIbrahiim/Website-downloader` | ❌ Skip | Node.js website cloner; too heavy for search, keep for offline archiving only. |
+| `unclecode/crawl4ai` | ✅✅ V1.2 | Async Python LLM-ready markdown extraction. Upgrade browser harness for cleaner search context. |
+| `browser-use/browser-use` | ✅✅ V1.3 | Playwright-based agentic web navigation. Give CHRONOS dynamic browser actions (clicking, forms). |
+| `D4Vinci/Scrapling` | ✅ V1.2 | Stealth scraper to bypass Cloudflare/Turnstile bot blockages. |
+| `curl_cffi` | ✅ V1.2 | Spoof TLS fingerprints for fast, raw, browserless web scraping. |
+
+### Hybrid Cloud Routing & Antigravity Delegation
+* **Hybrid Brain:** Keep low-latency voice, conversational chats, and secure local desktop actions on local Ollama models (`qwen3`). Route heavy reasoning, long-context queries, and complex tasks to cloud APIs (Gemini/Claude) on-demand.
+* **Antigravity / Agentic Delegation:** Give CHRONOS access to run Google Antigravity/Claude Code tools directly via local CLI execution, letting it leverage frontier AI computing power to solve coding, debugging, and system engineering tasks autonomously.
+* **Dynamic Model Switching (Future):** When delegating to Antigravity, have CHRONOS dynamically pass the preferred model (e.g., `agy --model claude-3-5-sonnet` vs `agy --model gemini-1.5-pro`) based on task requirements (speed vs. deep coding vs. large context) and to seamlessly failover if a specific model hits rate limits/quotas.
 
 ### Potential Models — Analyzed July 16, 2026
 - **GLM-5.2**: 744B params, cloud-only on Ollama, not locally runnable. Monitor for small distilled variants.
