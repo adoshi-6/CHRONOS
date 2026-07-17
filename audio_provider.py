@@ -10,23 +10,30 @@ import glob
 
 # Global speaking lock — prevents two TTS calls overlapping.
 # speak_text blocks until audio finishes so /api/speak only returns
-# when CHRONOS has truly finished speaking — which is what keeps the
+# when ACE has truly finished speaking — which is what keeps the
 # frontend mic muted for exactly the right duration.
 _speak_lock = threading.Lock()
 _active_speech_threads = 0
 _counter_lock = threading.Lock()
 
 # Dedicated cache folder for generated speech clips. Using a fresh filename
-# per utterance (instead of one shared "CHRONOS_SPEECH.mp3") is what fixes
+# per utterance (instead of one shared "ACE_SPEECH.mp3") is what fixes
 # the "audio randomly stops working" bug below.
-_AUDIO_CACHE_DIR = os.path.abspath("ace_audio_cache")
+_AUDIO_CACHE_DIR = os.path.abspath("ACE_AUDIO_CACHE")
 os.makedirs(_AUDIO_CACHE_DIR, exist_ok=True)
+
 
 is_currently_speaking = False
 
 
 def is_speaking():
     return is_currently_speaking or _speak_lock.locked()
+
+
+def stop_all_audio():
+    global is_currently_speaking
+    is_currently_speaking = False
+    _mci('close all')
 
 
 def stop_all_audio():
@@ -58,13 +65,27 @@ def _cleanup_old_clips(keep_last: int = 5):
         pass
 
 
+VOICE_MAP = {
+    "standard": "en-GB-RyanNeural",
+    "contrarian": "en-GB-SoniaNeural",
+    "first_principles": "en-GB-ThomasNeural",
+    "expansionist": "en-US-GuyNeural",
+    "outsider": "en-US-AriaNeural",
+    "executor": "en-US-ChristopherNeural",
+    "rainmaker": "en-US-EricNeural",
+    "chairman": "en-US-AndrewNeural",
+    "conductor": "en-GB-RyanNeural",
+}
+
+
 def speak_text(text, voice_mode="standard"):
     """
-    Converts text to speech using the Edge-TTS voice configured in config.py.
+    Converts text to speech using a mapped model voice (Edge-TTS).
     Blocks until playback is fully complete (play wait).
     """
     global is_currently_speaking, _active_speech_threads
     if not text or not text.strip():
+        # Decrement counter if we return early
         with _counter_lock:
             if _active_speech_threads <= 0:
                 is_currently_speaking = False
@@ -75,13 +96,10 @@ def speak_text(text, voice_mode="standard"):
     with _counter_lock:
         _active_speech_threads += 1
         is_currently_speaking = True
-
     clip_id = uuid.uuid4().hex
-    output_file = os.path.join(_AUDIO_CACHE_DIR, f"ace_{clip_id}.mp3")
-    alias = f"ace_audio_{clip_id[:8]}"
-    
-    from config import VOICE_TAG
-    selected_voice = VOICE_TAG
+    output_file = os.path.join(_AUDIO_CACHE_DIR, f"ACE_{clip_id}.mp3")
+    alias = f"ACE_audio_{clip_id[:8]}"
+    selected_voice = VOICE_MAP.get(voice_mode, "en-GB-RyanNeural")
 
     async def generate_speech():
         communicate = edge_tts.Communicate(text, selected_voice)
@@ -115,7 +133,6 @@ def speak_text(text, voice_mode="standard"):
             _active_speech_threads -= 1
             if _active_speech_threads <= 0:
                 is_currently_speaking = False
-
 
 def listen_to_user():
     """Captures microphone audio with an expanded window for long sentences."""

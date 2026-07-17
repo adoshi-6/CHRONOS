@@ -10,7 +10,7 @@
             width: 100%; 
             height: 100%; 
             overflow: hidden; 
-            background-color: ${BACKGROUND_COLOR}; 
+            background-color: #0E0F13; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             color: #ffffff; 
         }
@@ -424,7 +424,7 @@
             <div id="clock-display" style="font-size: 12px; font-family: monospace; color: rgba(255,255,255,0.6); margin-left: 20px; letter-spacing: 0.05em;"></div>
         </div>
         <div class="header-right">
-            <button class="ghost-btn" onclick="triggerMapModule()" title="Show system routing and agent layout">How ${ASSISTANT_NAME} Works</button>
+            <button class="ghost-btn" onclick="triggerMapModule()" title="Show system routing and agent layout">How ACE Works</button>
             <button class="ghost-btn" onclick="triggerAlertsModule()" title="Show server and connection status">SYSTEM HEALTH</button>
             <div class="status-container">
                 <span id="system-status-text">ONLINE</span>
@@ -434,8 +434,8 @@
 
     <div id="response-stack">
         <div class="response-card" id="welcome-card">
-            <div class="speaker-tag">${ASSISTANT_NAME}</div>
-            Online and ready, ${USER_NAME}. Say "hey ${ASSISTANT_NAME.toLowerCase()}" to start talking, or type below.
+            <div class="speaker-tag">ACE</div>
+            Online and ready, Aryan. Say "hey ACE" to start talking, or type below.
         </div>
     </div>
 
@@ -448,19 +448,19 @@
             </div>
             <div>
                 <div class="section-header">THINKING WITH <span id="scout-status">READY</span></div>
-                <div class="panel-entry" id="scout-entry" title="Which AI model or agent ${ASSISTANT_NAME} is using right now">Waiting for your first message.</div>
+                <div class="panel-entry" id="scout-entry" title="Which AI model or agent ACE is using right now">Waiting for your first message.</div>
             </div>
             <div>
                 <div class="section-header">MEMORY <span>LIVE</span></div>
-                <div class="panel-entry" id="flux-status" title="How much of ${ASSISTANT_NAME}'s short-term memory is in use — resets each session">0 of 20 messages remembered</div>
+                <div class="panel-entry" id="flux-status" title="How much of ACE's short-term memory is in use — resets each session">0 of 20 messages remembered</div>
             </div>
             <div>
                 <div class="section-header">LAST ROUTE <span>-</span></div>
-                <div class="panel-entry" id="last-route-entry" title="How ${ASSISTANT_NAME} decided to handle your last message">No requests yet.</div>
+                <div class="panel-entry" id="last-route-entry" title="How ACE decided to handle your last message">No requests yet.</div>
             </div>
             <div>
                 <div class="section-header">MODE <span id="mode-indicator">NORMAL</span></div>
-                <div class="panel-entry" id="mode-entry" title="${ASSISTANT_NAME}'s current operating mode">All systems active.</div>
+                <div class="panel-entry" id="mode-entry" title="ACE's current operating mode">All systems active.</div>
             </div>
         </div>
     </div>
@@ -480,11 +480,13 @@
                 <div class="pulse-ring"></div>
             </div>
         </div>
-        <div class="hint-text">SAY "hey ${ASSISTANT_NAME.toLowerCase()}" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
+        <div class="hint-text">SAY "hey ACE" TO START TALKING — "TURN OFF VOICE MODE" TO STOP</div>
     </div>
 
     <script src="/three.min.js"></script>
     <script>
+        const ASSISTANT_NAME = "ACE";
+        const USER_NAME = "Aryan";
         let scene, camera, renderer, starParticles, orbMesh, orbGlow;
         let recognition;
         
@@ -493,7 +495,7 @@
         let isServerProcessing = false;
         let isSpeaking = false;
 
-        // Stop ${ASSISTANT_NAME} audio only when the tab is closed — not when switching to another tab.
+        // Stop ACE audio only when the tab is closed — not when switching to another tab.
         // beforeunload fires on close/navigate-away; pagehide is the mobile equivalent.
         window.addEventListener('beforeunload', () => {
             fetch('/api/stop_audio', { method: 'POST' }).catch(() => {});
@@ -543,7 +545,7 @@
 
                 // Phrases that signal a question mid-sentence
                 const questionPhrases = ["can you", "could you", "would you", "should i",
-                    "do you", "does ${ASSISTANT_NAME.toLowerCase()}", "is there", "are there", "is it", "is this",
+                    "do you", "does ACE", "is there", "are there", "is it", "is this",
                     "what is", "what are", "what's", "how do", "how does", "how can",
                     "how much", "how many", "why is", "why does", "why are",
                     "tell me", "explain", "show me"];
@@ -735,8 +737,8 @@
                 const wakePhrases = [
                     `hey ${nameKey}`, `hi ${nameKey}`, `ok ${nameKey}`, `okay ${nameKey}`, nameKey
                 ];
-                // Support phonetic 'k' variant if configured name is 'CHRONOS'
-                if (nameKey === 'CHRONOS') {
+                // Support phonetic 'k' variant if configured name is 'ACE'
+                if (nameKey === 'ACE') {
                     wakePhrases.push("hey kronos", "hi kronos", "ok kronos", "okay kronos", "kronos");
                 }
                 let matchedWake = "";
@@ -850,14 +852,14 @@
             isServerProcessing = true;
             updateSystemUIState("processing");
             if (typeof payloadText === 'string') {
-                const pattern = ASSISTANT_NAME.toLowerCase() === 'CHRONOS'
-                    ? "\\b(CHRONOS|kronos)\\b"
+                const pattern = ASSISTANT_NAME.toLowerCase() === 'ACE'
+                    ? "\\b(ACE|kronos)\\b"
                     : "\\b" + ASSISTANT_NAME + "\\b";
                 const regex = new RegExp(pattern, 'gi');
                 payloadText = payloadText.replace(regex, ASSISTANT_NAME.toUpperCase());
             }
             let displayPayload = payloadText;
-            appendResponseCard(source === 'voice' ? `${USER_NAME} (Voice)` : `${USER_NAME} (Keyboard)`, displayPayload);
+            appendResponseCard(source === 'voice' ? `Aryan (Voice)` : `Aryan (Keyboard)`, displayPayload);
 
             document.getElementById('scout-status').innerText = "THINKING";
             document.getElementById('scout-entry').innerText = "Routing transaction package across local array nodes...";
@@ -889,18 +891,18 @@
                 document.getElementById('last-route-entry').innerText = routeMap[data.type] || `Direct chat via ${data.model}`;
 
                 // Update mode indicator if server returns one
-                if (data.chronos_mode) {
+                if (data.ACE_MODE) {
                     const modeLabels = {
                         normal:    ['NORMAL',    'All systems active.'],
                         safe:      ['SAFE MODE', 'Internet and desktop disabled.'],
                         focus:     ['FOCUS',     'Proactive interruptions blocked.'],
                         stealth:   ['STEALTH',   'No audio output — text only.'],
                         ghost:     ['GHOST',     'Nothing being logged this session.'],
-                        lockdown:  ['LOCKDOWN',  'Only responding to ${USER_NAME}.'],
+                        lockdown:  ['LOCKDOWN',  'Only responding to Aryan.'],
                         red_alert: ['RED ALERT', 'Every action requires confirmation.'],
                         standdown: ['STAND DOWN','Background activity paused.'],
                     };
-                    const [label, desc] = modeLabels[data.chronos_mode] || ['NORMAL', 'All systems active.'];
+                    const [label, desc] = modeLabels[data.ACE_MODE] || ['NORMAL', 'All systems active.'];
                     document.getElementById('mode-indicator').innerText = label;
                     document.getElementById('mode-entry').innerText = desc;
                 }
@@ -989,10 +991,14 @@
                         });
                     }
 
-                    async function speakPhase(text) {
+                    async function speakPhase(text, voice = "standard") {
                         isSpeaking = true;
                         if (recognition) { try { recognition.stop(); } catch(e) {} }
-                        await fetch('/api/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) });
+                        await fetch('/api/speak', { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify({ text: text, voice: voice }) 
+                        });
                     }
 
                     async function runCouncilOrbSequence() {
@@ -1015,7 +1021,7 @@
                         for (const agent of ORB_SEQUENCE) {
                             updateSystemTheme(agent.color);
                             setOrbActive(agent.key);
-                            await speakPhase(agent.intro + ' ' + agent.text);
+                            await speakPhase(agent.intro + ' ' + agent.text, agent.key);
                             setOrbDone(agent.key);
                             await new Promise(r => setTimeout(r, 200));
                         }
@@ -1025,7 +1031,7 @@
                         document.getElementById('council-verdict-label').innerText = 'Chairman Verdict';
                         document.getElementById('council-verdict-text').innerText = chairmanText;
                         document.getElementById('council-verdict').classList.add('visible');
-                        await speakPhase('Chairman final verdict. ' + chairmanText);
+                        await speakPhase('Chairman final verdict. ' + chairmanText, 'chairman');
 
                         document.getElementById('chairman-orb').classList.remove('active');
                         document.querySelectorAll('.council-line').forEach(l => l.classList.remove('active'));
@@ -1070,7 +1076,33 @@
                             desktop: `Desktop Agent`,
                         };
                         let tagLabel = labelMap[data.type] || data.model;
-                        card.innerHTML = `<div class="speaker-tag">${tagLabel}</div><div>${cleanText}</div><div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace; letter-spacing: 0.05em;">LATENCY: ${data.execution_time}s</div>`;
+                        
+                        let logHtml = "";
+                        if (data.logs && data.logs.length > 0) {
+                            let logItems = data.logs.map(l => {
+                                let cleanOutput = (l.output || "").substring(0, 100).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + ((l.output || "").length > 100 ? "..." : "");
+                                let verdictColor = l.verdict.startsWith("PASS") ? "#34C759" : "#FF453A";
+                                return `
+                                    <div style="margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                                        <b>Attempt ${l.attempt}</b> | Worker: <span style="color:#5AC8FA">${l.worker}</span><br>
+                                        <b>Spec:</b> ${l.spec}<br>
+                                        <b>Output:</b> <i>${cleanOutput}</i><br>
+                                        <b>Verdict:</b> <span style="color:${verdictColor}">${l.verdict}</span>
+                                    </div>
+                                `;
+                            }).join('');
+                            
+                            logHtml = `
+                                <div class="execution-logs" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);">
+                                    <a href="#" onclick="event.preventDefault(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';" style="font-size: 9px; font-family: monospace; color: var(--accent-glow); text-decoration: none;">[VIEW AGENTIC OS LOGS]</a>
+                                    <div class="logs-content" style="display: none; font-family: monospace; font-size: 10px; margin-top: 5px; color: rgba(255,255,255,0.6); max-height: 150px; overflow-y: auto;">
+                                        ${logItems}
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        card.innerHTML = `<div class="speaker-tag">${tagLabel}</div><div>${cleanText}</div>${logHtml}<div style="font-size: 10px; opacity: 0.4; text-align: right; margin-top: 6px; font-family: monospace; letter-spacing: 0.05em;">LATENCY: ${data.execution_time}s</div>`;
                         stack.appendChild(card);
                         stack.scrollTop = stack.scrollHeight;
                     } else {
@@ -1171,9 +1203,9 @@
             const card = document.createElement('div');
             card.className = 'response-card';
             card.innerHTML = `
-                <div class="speaker-tag">How ${ASSISTANT_NAME} Works</div>
+                <div class="speaker-tag">How ACE Works</div>
                 <div style="font-family: monospace; font-size: 11px; line-height: 1.8; margin-top: 8px;">
-                    Every message you send goes through Hermes — ${ASSISTANT_NAME}'s routing brain.<br>
+                    Every message you send goes through Hermes — ACE's routing brain.<br>
                     Hermes reads your message and decides which engine should handle it:<br><br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Casual chat</b> &rarr; Fast model (qwen3:1.7b) — replies in seconds<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Web search / live info</b> &rarr; Browser agent — opens a real browser tab invisibly<br>
@@ -1181,7 +1213,7 @@
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Brainstorming / decisions</b> &rarr; Council — 5 specialist AIs debate simultaneously,<br>
                     &nbsp;&nbsp;&nbsp;then a Chairman gives one clear verdict<br>
                     <span style="color:#2DD4A8;">&#9654;</span> <b>Coding</b> &rarr; Coding agent (offline until GPU server arrives)<br><br>
-                    Voice: your microphone is muted while ${ASSISTANT_NAME} speaks so it never hears itself.
+                    Voice: your microphone is muted while ACE speaks so it never hears itself.
                 </div>`;
             stack.appendChild(card);
             stack.scrollTop = stack.scrollHeight;

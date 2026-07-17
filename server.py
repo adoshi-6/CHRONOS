@@ -455,7 +455,7 @@ def ollama_call_coding(system: str, user: str) -> str:
         return f"[Coding agent error: {e}]"
 
 
-def _run_audio(text: str):
+def _run_audio(text: str, voice: str = "standard"):
     """Speak text in a background thread — never blocks Flask."""
     try:
         try:
@@ -463,16 +463,16 @@ def _run_audio(text: str):
             pythoncom.CoInitialize()
         except ImportError:
             pass
-        speak_text(text)
+        speak_text(text, voice)
     except Exception as e:
         print(f"❌ [Audio Engine]: {e}")
 
 
-def execute_audio_playback(text: str):
+def execute_audio_playback(text: str, voice: str = "standard"):
     """Fire-and-forget TTS — returns immediately."""
     import audio_provider
     audio_provider.is_currently_speaking = True
-    threading.Thread(target=_run_audio, args=(text,), daemon=True).start()
+    threading.Thread(target=_run_audio, args=(text, voice), daemon=True).start()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -880,7 +880,8 @@ with open(_council_config_path, "r", encoding="utf-8") as f:
     _council_data = json.load(f)
 
 # The first 6 are workers, the last is the chairman
-COUNCIL_AGENTS = {k: v for k, v in _council_data.items() if k != "chairman"}
+DEBATE_SEATS = ["contrarian", "first_principles", "expansionist", "outsider", "executor", "rainmaker"]
+COUNCIL_AGENTS = {k: v for k, v in _council_data.items() if k in DEBATE_SEATS}
 CHAIRMAN_SYSTEM = _council_data.get("chairman", {}).get("system", "")
 
 
@@ -937,6 +938,133 @@ def run_parallel_council(idea: str) -> dict:
     print("  ✅ Chairman complete.\n")
 
     return results
+
+
+def run_execution_loop(task: str) -> dict:
+    """
+    Step 2: Core Execution Loop (Conductor/Worker/Verifier)
+    Executes a task through planning, execution, and verification phases.
+    Iterates up to 3 times to get a verified result.
+    """
+    print(f"\n⚡ [Execution Loop]: Starting loop for task: '{task}'")
+    
+    cond_cfg = _council_data.get("conductor", {})
+    ver_cfg = _council_data.get("verifier", {})
+    
+    # 1. CONDUCTOR Plan
+    cond_sys = cond_cfg.get("system", "")
+    cond_prompt = cond_cfg.get("prompt", "").format(task=task)
+    
+    plan_json = {}
+    try:
+        raw_plan = ollama_call(SMART_MODEL, cond_sys, cond_prompt)
+        # Parse JSON from model output
+        clean_plan = re.sub(r'```[a-z]*\n?([\s\S]*?)```', r'\1', raw_plan).strip()
+        # Find outer JSON block if there is extra conversational text
+        json_match = re.search(r'\{[\s\S]*\}', clean_plan)
+        if json_match:
+            clean_plan = json_match.group(0)
+        plan_json = json.loads(clean_plan)
+    except Exception as e:
+        print(f"❌ [Conductor Planning Error]: {e}. Raw response: {raw_plan if 'raw_plan' in locals() else 'N/A'}")
+        return {"status": "error", "error": f"Conductor planning failed: {e}", "logs": []}
+
+    worker = plan_json.get("worker", "conversational")
+    spec = plan_json.get("spec", "")
+    done_when = plan_json.get("done_when", [])
+    
+    print(f"📋 [Conductor Plan]: Specialist: {worker} | Spec: '{spec}' | Done When: {done_when}")
+    
+    loop_logs = []
+    current_feedback = ""
+    success = False
+    final_output = ""
+    
+    # Iterate up to 3 times
+    for attempt in range(1, 4):
+        print(f"🔄 [Execution Attempt {attempt}/3]: Running Specialist Worker '{worker}'")
+        
+        # 2. WORKER executes
+        worker_output = ""
+        try:
+            if worker == "browser":
+                # Prepend previous feedback if we are retrying
+                full_spec = spec
+                if current_feedback:
+                    full_spec += f" (Note: previous search failed verification: {current_feedback})"
+                worker_output = execute_browser_harness(full_spec)
+            elif worker == "desktop":
+                full_spec = spec
+                if current_feedback:
+                    full_spec += f"\nNote: Previous attempt failed verification. Feedback: {current_feedback}"
+                worker_output = handle_desktop_command(full_spec)
+            elif worker == "coding":
+                coding_system = (
+                    "You are ACE's software engineering agent. No emojis. No filler. "
+                    "Address the user as 'sir' naturally. "
+                    "Provide clean, working code. "
+                )
+                if current_feedback:
+                    coding_system += f"\nPrevious attempt failed verification. Feedback: {current_feedback}"
+                worker_output = ollama_call_coding(coding_system, spec)
+            else:
+                # General text specialist worker (mathematician, sales, support)
+                worker_prompt = f"Perform this task: {spec}"
+                if current_feedback:
+                    worker_prompt += f"\nNote: Previous attempt failed. Verifier feedback: {current_feedback}. Adjust your answer accordingly."
+                
+                worker_sys = "You are a specialist worker on ACE's council. Be precise and direct."
+                # Check if there is a custom agent prompt matching the worker name
+                if worker in _council_data:
+                    worker_sys = _council_data[worker].get("system", worker_sys)
+                    
+                worker_output = ollama_call(SMART_MODEL, worker_sys, worker_prompt)
+        except Exception as e:
+            worker_output = f"Worker execution error: {e}"
+            print(f"❌ [Worker Error]: {e}")
+            
+        print(f"📥 [Worker Output]: {worker_output[:120]}...")
+        
+        # 3. VERIFIER checks output
+        ver_sys = ver_cfg.get("system", "")
+        ver_prompt = ver_cfg.get("prompt", "").format(
+            spec=spec,
+            done_when=json.dumps(done_when),
+            output=worker_output
+        )
+        
+        verdict = ""
+        try:
+            verdict = ollama_call(SMART_MODEL, ver_sys, ver_prompt).strip()
+        except Exception as e:
+            verdict = f"FAIL: Verifier error: {e}"
+            
+        print(f"🧐 [Verifier Verdict]: {verdict}")
+        
+        loop_logs.append({
+            "attempt": attempt,
+            "worker": worker,
+            "spec": spec,
+            "output": worker_output,
+            "verdict": verdict
+        })
+        
+        if verdict.startswith("PASS"):
+            success = True
+            final_output = worker_output
+            break
+        else:
+            current_feedback = verdict.replace("FAIL:", "").strip()
+            final_output = worker_output
+            
+    return {
+        "status": "success" if success else "failed",
+        "worker": worker,
+        "spec": spec,
+        "done_when": done_when,
+        "output": final_output,
+        "logs": loop_logs
+    }
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1247,8 +1375,9 @@ def serve_local_three_js():
 def handle_isolated_playback():
     data = request.get_json() or {}
     text = data.get('text', '').strip()
+    voice = data.get('voice', 'standard').strip()
     if text:
-        execute_audio_playback(text)
+        execute_audio_playback(text, voice)
     return jsonify({"status": "vocalization_complete"})
 
 
@@ -1517,13 +1646,11 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "browser":
         print(f"🌐 [Hermes]: Browser harness active...")
-        web_context = execute_browser_harness(command)
+        # Run through execution loop to verify web search
+        loop_res = run_execution_loop(command)
+        web_context = loop_res.get("output", "")
         synthesis_system = (
             "You are ACE, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. with live web access. "
-            "No emojis. No filler. Address the user as 'sir'. "
-            "Summarize key facts from web data to answer directly. "
-            "2 to 4 sentences. Skip ads and nav text. "
-            "If data does not contain an answer, say so plainly."
             "Never use emojis. Never start with filler phrases like Certainly or Great question. "
             "Summarize the most relevant facts from the web data to answer Aryan's question directly. "
             "2 to 4 sentences max. Skip navigation text and ads. "
@@ -1535,7 +1662,16 @@ def orchestrate_command_routing():
                 f"Aryan asked: {command}\n\nLive web data:\n{web_context}",
                 speak=(source == 'voice' and ACE_MODE != "stealth")
             )
-            return respond(reply, rtype="browser", model="hermes-browser", speak=False)
+            return jsonify({
+                "response":          reply,
+                "type":              "browser",
+                "model":             "hermes-browser",
+                "ACE_MODE":      ACE_MODE,
+                "interaction_count": interaction_session_counter,
+                "context_loaded":    context_string,
+                "execution_time":    round(time.time() - start_time, 2),
+                "logs":              loop_res.get("logs", [])
+            })
         except Exception as e:
             return respond(f"Browser synthesis failed: {e}", rtype="browser")
 
@@ -1572,8 +1708,20 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "desktop":
         print(f"🖥️  [Hermes]: Desktop agent active...")
-        result = handle_desktop_command(command)
-        return respond(result, rtype="desktop", model="desktop-agent", speak=True)
+        loop_res = run_execution_loop(command)
+        result = loop_res.get("output", "")
+        if source == 'voice' and ACE_MODE != "stealth":
+            execute_audio_playback(result)
+        return jsonify({
+            "response":          result,
+            "type":              "desktop",
+            "model":             "desktop-agent",
+            "ACE_MODE":      ACE_MODE,
+            "interaction_count": interaction_session_counter,
+            "context_loaded":    context_string,
+            "execution_time":    round(time.time() - start_time, 2),
+            "logs":              loop_res.get("logs", [])
+        })
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE D2 — CODING AGENT (disabled — no model loaded)
@@ -1581,15 +1729,20 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "coding":
         print(f"[Hermes]: Coding agent requested -> {CODING_MODEL}")
-        coding_system = (
-            "You are ACE's software engineering agent. No emojis. No filler. "
-            "Address the user as 'sir' naturally. "
-            "Provide clean, working code with the shortest necessary explanation. "
-            "If fixing something, state what was wrong in one sentence first."
-        )
-        if source == 'voice':
+        loop_res = run_execution_loop(command)
+        result = loop_res.get("output", "")
+        if source == 'voice' and ACE_MODE != "stealth":
             execute_audio_playback("Code compiled. Dropping it into your viewport now.")
-        return respond(reply, rtype="coding", model=CODING_MODEL)
+        return jsonify({
+            "response":          result,
+            "type":              "coding",
+            "model":             CODING_MODEL,
+            "ACE_MODE":      ACE_MODE,
+            "interaction_count": interaction_session_counter,
+            "context_loaded":    context_string,
+            "execution_time":    round(time.time() - start_time, 2),
+            "logs":              loop_res.get("logs", [])
+        })
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE E — SESSION END ("wrap it up", "end session", etc.)
