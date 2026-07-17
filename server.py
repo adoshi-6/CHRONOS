@@ -75,7 +75,7 @@ PROTECTED_ACTIONS = [
 
 # Current active mode — changes via code words
 # Modes: "normal", "safe", "focus", "stealth"
-ACE_MODE = "normal"
+CHRONOS_MODE = "normal"
 
 def _hash_pin(pin: str) -> str:
     """SHA-256 hash of the PIN — never store raw digits."""
@@ -119,7 +119,7 @@ pending_code_word         = None   # Holds a code word action waiting for PIN co
 
 # ============================================================
 # SELF-LEARNING MEMORY FILES
-# These files let ACE learn from mistakes and evolve over time.
+# These files let CHRONOS learn from mistakes and evolve over time.
 # They are plain JSON — you can open and edit them any time.
 # ============================================================
 MEMORY_DIR       = "ACE_MEMORY"
@@ -220,7 +220,7 @@ def build_system_advice(report: dict, user_query: str) -> str:
     )
 
     system_prompt = (
-        "You are ACE, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler. "
+        "You are CHRONOS, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler. "
         "Address the user as 'sir' naturally. "
         "You have just run a live hardware scan. "
         "Give a direct assessment and specific actionable advice. "
@@ -305,7 +305,7 @@ def save_self_edit(description: str, change_type: str, detail: str, approved: bo
 def build_lessons_context() -> str:
     """
     Injects stored lessons and recent corrections into the system prompt
-    so ACE walks into every conversation already knowing what not to repeat.
+    so CHRONOS walks into every conversation already knowing what not to repeat.
     """
     lessons     = load_lessons()
     corrections = load_corrections()
@@ -321,7 +321,7 @@ def build_lessons_context() -> str:
                          f"'{c['old_response'][:80]}...'. Correct answer: '{c['corrected_response'][:80]}...'")
         parts.append("Recent corrections to remember:\n" + "\n".join(lines))
     if parts:
-        return "\n\n[ACE SELF-LEARNING CONTEXT]\n" + "\n\n".join(parts) + "\n"
+        return "\n\n[CHRONOS SELF-LEARNING CONTEXT]\n" + "\n\n".join(parts) + "\n"
     return ""
 
 # ============================================================
@@ -497,7 +497,7 @@ CODE_WORDS = {
     "lockdown":      ("lockdown",      "stop accepting input from anyone until you say the unlock phrase"),
     "red alert":     ("red_alert",     "every action requires confirmation regardless of type"),
     "handoff":       ("handoff",       "save a full session summary to your desktop then shut down"),
-    "debrief":       ("debrief",       "tell you everything ACE did since you last checked in"),
+    "debrief":       ("debrief",       "tell you everything CHRONOS did since you last checked in"),
 }
 
 def detect_code_word(text: str) -> tuple[str, str] | None:
@@ -519,7 +519,7 @@ def execute_code_word(action_key: str) -> str:
     Execute a confirmed (PIN-verified) code word action.
     Returns a plain string reply to send back to the user.
     """
-    global ACE_MODE, chat_history
+    global CHRONOS_MODE, chat_history
 
     if action_key == "code_black":
         # Schedule server shutdown after response is sent
@@ -530,15 +530,15 @@ def execute_code_word(action_key: str) -> str:
         return "Code Black confirmed. Shutting down now."
 
     elif action_key == "safe_mode":
-        ACE_MODE = "safe"
+        CHRONOS_MODE = "safe"
         return "Safe Mode active. Internet and desktop access disabled. Chat only."
 
     elif action_key == "focus_mode":
-        ACE_MODE = "focus"
+        CHRONOS_MODE = "focus"
         return "Focus Mode active. All proactive interruptions blocked."
 
     elif action_key == "stealth_mode":
-        ACE_MODE = "stealth"
+        CHRONOS_MODE = "stealth"
         return "Stealth Mode active. No audio output. Text only."
 
     elif action_key == "briefing":
@@ -564,12 +564,12 @@ def execute_code_word(action_key: str) -> str:
             f"Mistakes logged: {len(mistakes)}.\n"
             f"Self-modifications approved: {len(edits)}. "
             f"Most recent: {chr(59).join(recent_edits) if recent_edits else 'None'}.\n"
-            f"Current mode: {ACE_MODE.upper()}."
+            f"Current mode: {CHRONOS_MODE.upper()}."
         )
 
         summary = ollama_call(
             FAST_MODEL,
-            "You are ACE giving Aryan a concise briefing. No emojis. No filler. "
+            "You are CHRONOS giving Aryan a concise briefing. No emojis. No filler. "
             "Summarize what has happened this session, what you have learned, "
             "and what your current status is. Be direct and brief — 3 to 5 sentences max.",
             briefing_context
@@ -583,11 +583,11 @@ def execute_code_word(action_key: str) -> str:
         return "Factory reset complete. All memory wiped. Starting clean."
 
     elif action_key == "stand_down":
-        ACE_MODE = "standdown"
+        CHRONOS_MODE = "standdown"
         return "Standing down. Background activity paused. Still here if you need me."
 
     elif action_key == "ghost_mode":
-        ACE_MODE = "ghost"
+        CHRONOS_MODE = "ghost"
         return "Ghost Mode active. Nothing will be logged or remembered this session."
 
     elif action_key == "purge":
@@ -596,15 +596,15 @@ def execute_code_word(action_key: str) -> str:
         return f"Session purged. {count} exchanges cleared. Long-term memory intact."
 
     elif action_key == "lockdown":
-        ACE_MODE = "lockdown"
+        CHRONOS_MODE = "lockdown"
         return "Lockdown active. I will only respond to you saying your name or unlock phrase."
 
     elif action_key == "red_alert":
-        ACE_MODE = "red_alert"
+        CHRONOS_MODE = "red_alert"
         return "Red Alert active. Every action will require your confirmation."
 
     elif action_key == "handoff":
-        summary = f"Session summary — {len(chat_history)//2} exchanges. Mode: {ACE_MODE}. Lessons: {len(load_lessons())}."
+        summary = f"Session summary — {len(chat_history)//2} exchanges. Mode: {CHRONOS_MODE}. Lessons: {len(load_lessons())}."
         path = os.path.join(DESKTOP_PATH, "ACE_HANDOFF.txt")
         try:
             with open(path, "w") as hf:
@@ -623,7 +623,7 @@ def execute_code_word(action_key: str) -> str:
         parts = [f"Since last session: {len(load_mistakes())} mistakes logged."]
         if recent:
             parts.append("Recent self-changes: " + "; ".join(recent))
-        parts.append(f"Current mode: {ACE_MODE}.")
+        parts.append(f"Current mode: {CHRONOS_MODE}.")
         return " ".join(parts)
 
     return f"Code word '{action_key}' recognised but not yet implemented."
@@ -663,7 +663,7 @@ def should_trigger_browser(text: str) -> bool:
 
 
 def should_trigger_correction(text: str) -> bool:
-    """Detects when Aryan is telling ACE it made a mistake."""
+    """Detects when Aryan is telling CHRONOS it made a mistake."""
     keywords = [
         "that was wrong", "you were wrong", "that's incorrect", "you made a mistake",
         "that's not right", "you got that wrong", "incorrect", "bad answer",
@@ -674,7 +674,7 @@ def should_trigger_correction(text: str) -> bool:
 
 
 def should_trigger_self_modification(text: str) -> bool:
-    """Detects when Aryan wants ACE to change how it behaves or learn something."""
+    """Detects when Aryan wants CHRONOS to change how it behaves or learn something."""
     keywords = [
         "change yourself", "modify yourself", "update yourself", "alter yourself",
         "learn to", "remember to always", "remember to never", "from now on",
@@ -693,7 +693,7 @@ def build_self_modification_proposal(command: str) -> dict:
     """
     extraction = ollama_call(
         FAST_MODEL,
-        "You are ACE. Aryan wants you to change something about how you behave. "
+        "You are CHRONOS. Aryan wants you to change something about how you behave. "
         "Extract and describe the proposed change. "
         "Respond ONLY as JSON: "
         '{"change_type": "behavior|tone|lesson|rule", '
@@ -738,7 +738,7 @@ def should_trigger_session_end(text: str) -> bool:
         "wrap it up", "end session", "that's all for today", "thats all for today",
         "i'm done for today", "im done for today", "shut it down for today",
         "call it a day", "we're done", "were done", "end of day",
-        "close out", "wrap up for today", "finish up", "good night ACE",
+        "close out", "wrap up for today", "finish up", "good night CHRONOS",
         "good night", "terminate session", "end the day",
     ]
     return any(p in text.lower() for p in phrases)
@@ -839,11 +839,11 @@ def classify_command_route(command: str) -> str:
         "Answer with ONLY the category name. Example: conversational"
     )
     try:
-        # Determine assistant name dynamically in github version, or use ACE directly
+        # Determine assistant name dynamically in github version, or use CHRONOS directly
         try:
             name_label = ASSISTANT_NAME
         except NameError:
-            name_label = "ACE"
+            name_label = "CHRONOS"
             
         reply = ollama_call(FAST_MODEL, system_prompt, f"User command: {command}")
         route = reply.strip().lower().replace("'", "").replace('"', "")
@@ -1000,7 +1000,7 @@ def run_execution_loop(task: str) -> dict:
                 worker_output = handle_desktop_command(full_spec)
             elif worker == "coding":
                 coding_system = (
-                    "You are ACE's software engineering agent. No emojis. No filler. "
+                    "You are CHRONOS's software engineering agent. No emojis. No filler. "
                     "Address the user as 'sir' naturally. "
                     "Provide clean, working code. "
                 )
@@ -1013,7 +1013,7 @@ def run_execution_loop(task: str) -> dict:
                 if current_feedback:
                     worker_prompt += f"\nNote: Previous attempt failed. Verifier feedback: {current_feedback}. Adjust your answer accordingly."
                 
-                worker_sys = "You are a specialist worker on ACE's council. Be precise and direct."
+                worker_sys = "You are a specialist worker on CHRONOS's council. Be precise and direct."
                 # Check if there is a custom agent prompt matching the worker name
                 if worker in _council_data:
                     worker_sys = _council_data[worker].get("system", worker_sys)
@@ -1311,7 +1311,7 @@ def pin_status():
     """Frontend polls this on load to know if PIN setup is needed."""
     return jsonify({
         "pin_set": pin_is_set(),
-        "ACE_MODE": ACE_MODE,
+        "CHRONOS_MODE": CHRONOS_MODE,
     })
 
 
@@ -1330,7 +1330,7 @@ def stop_audio():
 @app.route('/api/is_speaking', methods=['GET'])
 def check_is_speaking():
     """
-    Frontend polls this after every response to know when ACE has
+    Frontend polls this after every response to know when CHRONOS has
     finished talking so it can safely re-arm the microphone. Without this
     route the frontend's restart-listening loop has nothing valid to poll
     and the mic never comes back on after the first reply.
@@ -1389,7 +1389,7 @@ def handle_isolated_playback():
 @app.route('/api/command', methods=['POST'])
 def orchestrate_command_routing():
     global chat_history, pending_memory_clear, interaction_session_counter, pending_self_modification
-    global pending_pin_action, pending_pin_setup, pending_code_word, ACE_MODE
+    global pending_pin_action, pending_pin_setup, pending_code_word, CHRONOS_MODE
     start_time = time.time()
 
     data    = request.get_json() or {}
@@ -1406,13 +1406,13 @@ def orchestrate_command_routing():
 
     def respond(reply, rtype="standard", model=FAST_MODEL, speak=False):
         """Helper to build a consistent response dict and optionally speak."""
-        if speak and source == 'voice' and ACE_MODE != "stealth":
+        if speak and source == 'voice' and CHRONOS_MODE != "stealth":
             execute_audio_playback(reply if isinstance(reply, str) else "Response ready.")
         return jsonify({
             "response":          reply,
             "type":              rtype,
             "model":             model,
-            "ACE_MODE":          ACE_MODE,
+            "CHRONOS_MODE":          CHRONOS_MODE,
             "interaction_count": interaction_session_counter,
             "context_loaded":    context_string,
             "execution_time":    round(time.time() - start_time, 2),
@@ -1443,16 +1443,16 @@ def orchestrate_command_routing():
         return respond(reply, speak=True)
 
     # ── Stealth mode — no audio output ──────────────────────────────────
-    if ACE_MODE == "stealth":
+    if CHRONOS_MODE == "stealth":
         source = "text"   # Force text-only — no TTS fired regardless of source
 
     # ── Lockdown mode — ignore everyone ─────────────────────────────────
-    if ACE_MODE == "lockdown":
+    if CHRONOS_MODE == "lockdown":
         unlock_phrases = ["aryan", "unlock", "i am aryan", "this is aryan"]
         if not any(p in lower_cmd for p in unlock_phrases):
             return respond("Lockdown active. Not responding.", speak=False)
         else:
-            ACE_MODE = "normal"
+            CHRONOS_MODE = "normal"
             return respond("Lockdown lifted. Welcome back, Aryan.", speak=True)
 
     # ── Code word detection ──────────────────────────────────────────────
@@ -1474,7 +1474,7 @@ def orchestrate_command_routing():
             action = pending_code_word
             pending_code_word = None
             result = execute_code_word(action)
-            return respond(result, speak=(ACE_MODE != "stealth"))
+            return respond(result, speak=(CHRONOS_MODE != "stealth"))
         else:
             pending_code_word = None
             reply = "Incorrect PIN. Code word action cancelled."
@@ -1589,15 +1589,15 @@ def orchestrate_command_routing():
         "disable lockdown", "exit lockdown",
         "cancel mode", "deactivate mode", "clear mode", "reset mode",
     ]
-    if any(phrase in lower_cmd for phrase in mode_off_phrases) and ACE_MODE != "normal":
-        old_mode = ACE_MODE
-        ACE_MODE = "normal"
+    if any(phrase in lower_cmd for phrase in mode_off_phrases) and CHRONOS_MODE != "normal":
+        old_mode = CHRONOS_MODE
+        CHRONOS_MODE = "normal"
         reply = f"{old_mode.replace('_', ' ').title()} deactivated. Back to normal."
         return respond(reply, speak=True)
 
     # ── Voice control ───────────────────────────────────────────────────────
     if any(x in lower_cmd for x in ["turn microphone off", "microphone off", "voice mode off", "deactivate voice", "turn off voice mode", "turn off the microphone"]):
-        reply = "Entering standby. Say 'Hey ACE' or 'activate voice mode' when you need me."
+        reply = "Entering standby. Say 'Hey CHRONOS' or 'activate voice mode' when you need me."
         return respond(reply, rtype="shutdown", speak=True)
 
     if any(x in lower_cmd for x in ["activate voice mode", "turn on microphone", "voice mode on"]):
@@ -1610,7 +1610,7 @@ def orchestrate_command_routing():
     print(f"🎯 [Hermes Orchestrator] Dynamic LLM Route: {route}")
 
     # ── Safe mode guard — block internet and desktop ─────────────────────
-    if ACE_MODE == "safe":
+    if CHRONOS_MODE == "safe":
         if route in ("browser", "desktop"):
             return respond(
                 "Safe Mode is active — internet and desktop access are disabled. "
@@ -1619,7 +1619,7 @@ def orchestrate_command_routing():
             )
 
     # ── Red alert guard — every action needs confirmation ─────────────────
-    if ACE_MODE == "red_alert" and not pending_pin_action:
+    if CHRONOS_MODE == "red_alert" and not pending_pin_action:
         pending_pin_action = {"command": command, "action": "red_alert_confirm"}
         return respond(
             "Red Alert is active. Enter your PIN to confirm this action.",
@@ -1655,7 +1655,7 @@ def orchestrate_command_routing():
         loop_res = run_execution_loop(command)
         web_context = loop_res.get("output", "")
         synthesis_system = (
-            "You are ACE, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. with live web access. "
+            "You are CHRONOS, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. with live web access. "
             "Never use emojis. Never start with filler phrases like Certainly or Great question. "
             "Summarize the most relevant facts from the web data to answer Aryan's question directly. "
             "2 to 4 sentences max. Skip navigation text and ads. "
@@ -1665,13 +1665,13 @@ def orchestrate_command_routing():
             reply = ollama_call_streaming(
                 SMART_MODEL, synthesis_system,
                 f"Aryan asked: {command}\n\nLive web data:\n{web_context}",
-                speak=(source == 'voice' and ACE_MODE != "stealth")
+                speak=(source == 'voice' and CHRONOS_MODE != "stealth")
             )
             return jsonify({
                 "response":          reply,
                 "type":              "browser",
                 "model":             "hermes-browser",
-                "ACE_MODE":      ACE_MODE,
+                "CHRONOS_MODE":      CHRONOS_MODE,
                 "interaction_count": interaction_session_counter,
                 "context_loaded":    context_string,
                 "execution_time":    round(time.time() - start_time, 2),
@@ -1715,13 +1715,13 @@ def orchestrate_command_routing():
         print(f"🖥️  [Hermes]: Desktop agent active...")
         loop_res = run_execution_loop(command)
         result = loop_res.get("output", "")
-        if source == 'voice' and ACE_MODE != "stealth":
+        if source == 'voice' and CHRONOS_MODE != "stealth":
             execute_audio_playback(result)
         return jsonify({
             "response":          result,
             "type":              "desktop",
             "model":             "desktop-agent",
-            "ACE_MODE":      ACE_MODE,
+            "CHRONOS_MODE":      CHRONOS_MODE,
             "interaction_count": interaction_session_counter,
             "context_loaded":    context_string,
             "execution_time":    round(time.time() - start_time, 2),
@@ -1736,13 +1736,13 @@ def orchestrate_command_routing():
         print(f"[Hermes]: Coding agent requested -> {CODING_MODEL}")
         loop_res = run_execution_loop(command)
         result = loop_res.get("output", "")
-        if source == 'voice' and ACE_MODE != "stealth":
+        if source == 'voice' and CHRONOS_MODE != "stealth":
             execute_audio_playback("Code compiled. Dropping it into your viewport now.")
         return jsonify({
             "response":          result,
             "type":              "coding",
             "model":             CODING_MODEL,
-            "ACE_MODE":      ACE_MODE,
+            "CHRONOS_MODE":      CHRONOS_MODE,
             "interaction_count": interaction_session_counter,
             "context_loaded":    context_string,
             "execution_time":    round(time.time() - start_time, 2),
@@ -1777,7 +1777,7 @@ def orchestrate_command_routing():
         combined = "\n\n".join(all_context) if all_context else "No news data retrieved."
 
         news_system = (
-            "You are ACE, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. delivering a morning news briefing. "
+            "You are CHRONOS, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. delivering a morning news briefing. "
             "No emojis. No filler. Address the user as 'sir'. "
             "Summarise the most important headlines from the data provided. "
             "Group by category if possible: world, US, tech. "
@@ -1787,14 +1787,14 @@ def orchestrate_command_routing():
         reply = ollama_call_streaming(
             SMART_MODEL, news_system,
             f"Today's news data:\n{combined}",
-            speak=(source == 'voice' and ACE_MODE != "stealth")
+            speak=(source == 'voice' and CHRONOS_MODE != "stealth")
         )
         return respond(reply, rtype="browser", model="news-briefing", speak=False)
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE G — SELF-MODIFICATION REQUEST
-    # Aryan asks ACE to change how it behaves, learn something, or fix itself.
-    # ACE proposes the change, then waits for explicit approval before applying.
+    # Aryan asks CHRONOS to change how it behaves, learn something, or fix itself.
+    # CHRONOS proposes the change, then waits for explicit approval before applying.
     # ══════════════════════════════════════════════════════════════════════
     elif route == "self_modification":
         print(f"[Self-Modify]: Self-modification request detected.")
@@ -1825,7 +1825,7 @@ def orchestrate_command_routing():
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE I — EXPLICIT CORRECTION ("that was wrong", "you made a mistake")
-    # ACE logs the mistake and asks Aryan for the correct answer.
+    # CHRONOS logs the mistake and asks Aryan for the correct answer.
     # ══════════════════════════════════════════════════════════════════════
     elif route == "correction":
         print(f"[Self-Learn]: Correction signal detected.")
@@ -1836,7 +1836,7 @@ def orchestrate_command_routing():
         # Derive a lesson automatically
         lesson_text = ollama_call(
             FAST_MODEL,
-            "You are ACE. Based on the mistake described, write one short lesson (1 sentence) "
+            "You are CHRONOS. Based on the mistake described, write one short lesson (1 sentence) "
             "that you should remember to avoid repeating this error. Start with 'Remember:'.",
             f"Mistake: {command}\nBad response was: {last_reply}"
         )
@@ -1857,7 +1857,7 @@ def orchestrate_command_routing():
         print(f"⚡ [Hermes]: Conversational route -> {FAST_MODEL}")
         lessons_ctx = build_lessons_context()
         chat_system = (
-            "You are ACE, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler phrases. "
+            "You are CHRONOS, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. No emojis. No filler phrases. "
             "You have full capabilities to search the internet/web (via the browser harness) and execute commands/open applications on the user's desktop. Never claim that you cannot access the internet, browse the web, or control the desktop. "
             "Speak like a sharp, trusted friend — warm, direct, and brief. "
             "Address the user as 'sir' naturally in conversation. "
@@ -1873,7 +1873,7 @@ def orchestrate_command_routing():
         try:
             reply = stream_and_speak_sentences(
                 messages, FAST_MODEL,
-                speak=(source == 'voice' and ACE_MODE != "stealth")
+                speak=(source == 'voice' and CHRONOS_MODE != "stealth")
             )
 
             chat_history.append({"role": "user",      "content": command})
@@ -1889,7 +1889,7 @@ def orchestrate_command_routing():
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("  ACE SERVER — Hermes Parallel Architecture")
+    print("  CHRONOS SERVER — Hermes Parallel Architecture")
     print(f"  Fast:   {FAST_MODEL}")
     print(f"  Smart:  {SMART_MODEL}")
     print(f"  Coding: {CODING_MODEL}")

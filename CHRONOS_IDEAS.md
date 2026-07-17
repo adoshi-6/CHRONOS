@@ -28,7 +28,7 @@
 ## Implementation Plan — Version Roadmap
 
 ### ✅ Version 1.0: Foundation, Aesthetics & Quick Wins (COMPLETE — July 2026)
-- [x] Full ACE → CHRONOS rename (personal files)
+- [x] Full CHRONOS → CHRONOS rename (personal files)
 - [x] Fix audio feedback loop (mic muted while CHRONOS speaks)
 - [x] Dashboard redesign — dark theme with teal/purple gradients
 - [x] 3D orb animation upgrade (electron cloud style)
@@ -217,7 +217,7 @@
 
 | Date | What Was Done |
 |------|--------------|
-| July 2026 | ACE → CHRONOS rename complete |
+| July 2026 | CHRONOS → CHRONOS rename complete |
 | July 2026 | Audio streaming, UUID cache, thread-safe mic control |
 | July 2026 | Hermes Agent v0.18.2 installed, pointed at Ollama server (`100.88.1.86`) |
 | July 15, 2026 | Confirmed V1.0 complete. Began planning V1.1. |

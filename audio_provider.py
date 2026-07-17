@@ -10,7 +10,7 @@ import glob
 
 # Global speaking lock — prevents two TTS calls overlapping.
 # speak_text blocks until audio finishes so /api/speak only returns
-# when ACE has truly finished speaking — which is what keeps the
+# when CHRONOS has truly finished speaking — which is what keeps the
 # frontend mic muted for exactly the right duration.
 _speak_lock = threading.Lock()
 _active_speech_threads = 0
