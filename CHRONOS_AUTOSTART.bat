@@ -24,6 +24,9 @@ echo [SERVICE]: Starting CHRONOS Server in 24/7 Auto-Restart Loop...
 echo [SERVICE]: Press Ctrl+C in this console to stop the service.
 echo.
 
+:: Open browser automatically after 3 seconds in background thread
+start /min cmd /c "timeout /t 3 /nobreak > nul && start http://localhost:5000"
+
 :SERVICE_LOOP
 echo [%date% %time%] [SERVICE]: Starting server process...
 .venv\Scripts\python.exe server.py
