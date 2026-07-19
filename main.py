@@ -22,8 +22,8 @@ def should_trigger_council(user_input):
  if neg in text:
  for kw in triggers:
  if kw in text and text.find(neg) < text.find(kw):
-  print(f" [Negation Shield Tripped: Bypassing Council Feature]")
-  return False
+ print(f" [Negation Shield Tripped: Bypassing Council Feature]")
+ return False
  return True
 
 def handle_standard_chat(user_query):

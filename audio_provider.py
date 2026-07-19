@@ -115,8 +115,8 @@ def speak_text(text, voice_mode="standard"):
 
  try:
  if not _mci(f'open "{output_file}" type mpegvideo alias {alias}'):
-  print(f"[Audio pipeline error: could not open clip {clip_id}]")
-  return
+ print(f"[Audio pipeline error: could not open clip {clip_id}]")
+ return
  # "play wait" blocks until playback is done — no polling loop needed
  _mci(f'play {alias} wait')
  finally:
@@ -124,9 +124,9 @@ def speak_text(text, voice_mode="standard"):
  # playback threw — this is exactly what was jamming later replies.
  _mci(f'close {alias}')
  try:
-  os.remove(output_file)
+ os.remove(output_file)
  except Exception:
-  pass
+ pass
  _cleanup_old_clips()
  finally:
  with _counter_lock:
