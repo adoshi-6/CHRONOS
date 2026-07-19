@@ -19,7 +19,7 @@ print("2. [PASS] All libraries imported successfully.")
 async def diagnostic():
  print("3. [PASS] Async event loop started. Testing connection to edge-tts...")
 
- text  = "Voice pipeline diagnostic test."
+ text = "Voice pipeline diagnostic test."
  voice_tag = "en-GB-RyanNeural"
  communicate = edge_tts.Communicate(text, voice_tag)
 
@@ -31,7 +31,7 @@ async def diagnostic():
  abs_path = os.path.abspath("diagnostic_test.mp3")
 
  ctypes.windll.winmm.mciSendStringW(
-  f'open "{abs_path}" type mpegvideo alias test_play', None, 0, 0)
+ f'open "{abs_path}" type mpegvideo alias test_play', None, 0, 0)
  ctypes.windll.winmm.mciSendStringW('play test_play wait', None, 0, 0)
  ctypes.windll.winmm.mciSendStringW('close test_play', None, 0, 0)
  print("7. [PASS] Windows audio layer responded cleanly.")
@@ -39,7 +39,7 @@ async def diagnostic():
 
 if __name__ == "__main__":
  try:
-  asyncio.run(diagnostic())
-  print("\n[ALL SYSTEMS CLEAR] Your setup fully supports this audio pipeline.")
+ asyncio.run(diagnostic())
+ print("\n[ALL SYSTEMS CLEAR] Your setup fully supports this audio pipeline.")
  except Exception as e:
-  print(f"\n[DIAGNOSTIC FAILED] Error: {e}")
+ print(f"\n[DIAGNOSTIC FAILED] Error: {e}")

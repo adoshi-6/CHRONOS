@@ -12,16 +12,16 @@ if not api_key:
 else:
  headers = {"xi-api-key": api_key}
  try:
-  url = "https://api.elevenlabs.io/v1/user/subscription"
-  response = requests.get(url, headers=headers).json()
+ url = "https://api.elevenlabs.io/v1/user/subscription"
+ response = requests.get(url, headers=headers).json()
 
-  used  = response.get("character_count", 0)
-  limit  = response.get("character_limit", 0)
-  remaining = limit - used
+ used = response.get("character_count", 0)
+ limit = response.get("character_limit", 0)
+ remaining = limit - used
 
-  print("\n========================================")
-  print(f" ElevenLabs Balance: {remaining:,} / {limit:,} credits remaining")
-  print("========================================\n")
+ print("\n========================================")
+ print(f" ElevenLabs Balance: {remaining:,} / {limit:,} credits remaining")
+ print("========================================\n")
 
  except Exception as e:
-  print(f"[Failed to fetch ElevenLabs balance: {e}]")
+ print(f"[Failed to fetch ElevenLabs balance: {e}]")

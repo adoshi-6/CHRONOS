@@ -21,13 +21,13 @@ def generate_response(conversation_history: list, system_prompt: str):
  messages = [{"role": "system", "content": system_prompt}] + conversation_history
 
  try:
-  response = client.chat.completions.create(
-   model=SMART_MODEL,
-   messages=messages,
-   tools=TOOL_DEFINITIONS,
-   stream=True,
-  )
-  return response
+ response = client.chat.completions.create(
+  model=SMART_MODEL,
+  messages=messages,
+  tools=TOOL_DEFINITIONS,
+  stream=True,
+ )
+ return response
  except Exception as e:
-  print(f"[Model provider error: {e}]")
-  return None
+ print(f"[Model provider error: {e}]")
+ return None

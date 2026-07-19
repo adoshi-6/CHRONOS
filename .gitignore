@@ -56,5 +56,8 @@ CHRONOS_IDEAS.md
 implementation_plan.md
 walkthrough.md
 
-# Personal Configuration Profiles
+# Personal & Business Private Profiles
 profiles/personal.json
+profiles/business.json
+ui/personal/
+ui/business/

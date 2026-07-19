@@ -1456,7 +1456,10 @@ def health_check():
 @app.route('/')
 def serve_dashboard_console():
   try:
-    with open('index.html', 'r', encoding='utf-8') as f:
+    filepath = os.path.join('ui', ACTIVE_PROFILE, 'index.html')
+    if not os.path.exists(filepath):
+      filepath = 'index.html'
+    with open(filepath, 'r', encoding='utf-8') as f:
       return f.read()
   except Exception as e:
     return f"Dashboard load failure: {e}"

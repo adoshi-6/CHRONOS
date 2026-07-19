@@ -41,8 +41,8 @@ SYSTEM_PROMPT = (
 # ENGINE Models 
 # These must be pulled in Model server before running.
 # Example: run model server pull qwen3:1.7b in your terminal.
-FAST_MODEL = "qwen3:1.7b"  # Used for quick conversational replies
-SMART_MODEL = "qwen3:4b"  # Used for council debates and research
+FAST_MODEL = "qwen3:1.7b" # Used for quick conversational replies
+SMART_MODEL = "qwen3:4b" # Used for council debates and research
 
 
 # Voice 
@@ -92,18 +92,18 @@ PROTECTED_ACTIONS = [
 # The action keys must stay exactly as they are (they map to internal logic).
 CODE_WORDS = {
  "shutdown now": ("code_black", "shut down everything immediately"),
- "safe mode":  ("safe_mode",  "disable internet and desktop access — chat only"),
- "focus mode":  ("focus_mode", "block all proactive interruptions"),
+ "safe mode": ("safe_mode", "disable internet and desktop access — chat only"),
+ "focus mode": ("focus_mode", "block all proactive interruptions"),
  "stealth mode": ("stealth_mode", "disable all audio output — text only"),
- "briefing":  ("briefing",  "summarise everything since your last session"),
+ "briefing": ("briefing", "summarise everything since your last session"),
  "factory reset": ("factory_reset", "wipe ALL memory — cannot be undone"),
- "stand down":  ("stand_down", "pause all background activity"),
- "ghost mode":  ("ghost_mode", "stop logging anything this session"),
- "purge session": ("purge",   "clear this session only, keep long-term memory"),
- "lockdown":  ("lockdown",  "stop responding to anyone until unlocked"),
- "high alert":  ("red_alert",  "require confirmation before every action"),
- "save and quit": ("handoff",  "save a session summary to desktop then shut down"),
- "status report": ("debrief",  "report everything done since last check-in"),
+ "stand down": ("stand_down", "pause all background activity"),
+ "ghost mode": ("ghost_mode", "stop logging anything this session"),
+ "purge session": ("purge",  "clear this session only, keep long-term memory"),
+ "lockdown": ("lockdown", "stop responding to anyone until unlocked"),
+ "high alert": ("red_alert", "require confirmation before every action"),
+ "save and quit": ("handoff", "save a session summary to desktop then shut down"),
+ "status report": ("debrief", "report everything done since last check-in"),
 }
 
 # Unlock phrases accepted during lockdown mode.
