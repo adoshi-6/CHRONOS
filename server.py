@@ -28,13 +28,23 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from playwright.sync_api import sync_playwright
 from audio_provider import speak_text, is_speaking
 
-# Trust Ledger Import 
+# Trust Ledger & Security Infrastructure Imports 
 try:
   from trust_ledger import log_event, get_recent_logs, get_audit_summary
 except ImportError:
   def log_event(*args, **kwargs): pass
   def get_recent_logs(*args, **kwargs): return []
   def get_audit_summary(*args, **kwargs): return {}
+
+try:
+  import trust_escalation
+  import agent_shield
+  import memory_distillation
+  import health_check
+  import clarity_gate
+  import file_lock
+except ImportError as e:
+  print(f"️ [Phase 1 Import Warning]: {e}")
 
 PENDING_GATE_REQUESTS = {}
 gate_request_counter = 0
@@ -1506,6 +1516,30 @@ def get_trust_ledger_data():
   logs = get_recent_logs(limit=limit, profile=profile)
   summary = get_audit_summary()
   return jsonify({"summary": summary, "logs": logs})
+
+
+@app.route('/api/health', methods=['GET'])
+def get_system_health():
+  try:
+    report = health_check.run_system_health_check()
+  except Exception as e:
+    report = {"status": "error", "message": str(e)}
+  return jsonify(report)
+
+
+@app.route('/api/learned_rules', methods=['GET', 'POST'])
+def handle_learned_rules():
+  if request.method == 'POST':
+    data = request.get_json() or {}
+    rule_text = data.get("rule_text", "").strip()
+    category = data.get("category", "general")
+    if not rule_text:
+      return jsonify({"error": "rule_text required"}), 400
+    res = memory_distillation.add_learned_rule(rule_text, category=category)
+    return jsonify(res)
+  else:
+    rules = memory_distillation.get_relevant_learned_rules()
+    return jsonify({"rules": rules})
 
 
 @app.route('/api/permission_gate/pending', methods=['GET'])

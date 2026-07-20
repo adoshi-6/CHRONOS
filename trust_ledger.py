@@ -21,14 +21,14 @@ def _init_db():
  cursor = conn.cursor()
  cursor.execute("""
  CREATE TABLE IF NOT EXISTS trust_ledger (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp TEXT NOT NULL,
-  profile TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  action TEXT NOT NULL,
-  status TEXT NOT NULL,
-  details TEXT,
-  model_used TEXT
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ timestamp TEXT NOT NULL,
+ profile TEXT NOT NULL,
+ event_type TEXT NOT NULL,
+ action TEXT NOT NULL,
+ status TEXT NOT NULL,
+ details TEXT,
+ model_used TEXT
  )
  """)
  conn.commit()
@@ -50,8 +50,8 @@ def log_event(event_type: str, action: str, status: str, details: dict | str = N
  details_json = json.dumps(details) if isinstance(details, (dict, list)) else str(details or "")
  
  cursor.execute("""
-  INSERT INTO trust_ledger (timestamp, profile, event_type, action, status, details, model_used)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+ INSERT INTO trust_ledger (timestamp, profile, event_type, action, status, details, model_used)
+ VALUES (?, ?, ?, ?, ?, ?, ?)
  """, (timestamp, profile, event_type, action, status, details_json, model_used))
  
  conn.commit()
@@ -71,37 +71,37 @@ def get_recent_logs(limit: int = 50, profile: str = None) -> list:
  cursor = conn.cursor()
  
  if profile:
-  cursor.execute("""
-  SELECT id, timestamp, profile, event_type, action, status, details, model_used
-  FROM trust_ledger WHERE profile = ? ORDER BY id DESC LIMIT ?
-  """, (profile, limit))
+ cursor.execute("""
+ SELECT id, timestamp, profile, event_type, action, status, details, model_used
+ FROM trust_ledger WHERE profile = ? ORDER BY id DESC LIMIT ?
+ """, (profile, limit))
  else:
-  cursor.execute("""
-  SELECT id, timestamp, profile, event_type, action, status, details, model_used
-  FROM trust_ledger ORDER BY id DESC LIMIT ?
-  """, (limit,))
-  
+ cursor.execute("""
+ SELECT id, timestamp, profile, event_type, action, status, details, model_used
+ FROM trust_ledger ORDER BY id DESC LIMIT ?
+ """, (limit,))
+ 
  rows = cursor.fetchall()
  conn.close()
  
  logs = []
  for r in rows:
-  details_parsed = r[6]
-  try:
-  details_parsed = json.loads(r[6])
-  except Exception:
-  pass
-  
-  logs.append({
-  "id": r[0],
-  "timestamp": r[1],
-  "profile": r[2],
-  "event_type": r[3],
-  "action": r[4],
-  "status": r[5],
-  "details": details_parsed,
-  "model_used": r[7]
-  })
+ details_parsed = r[6]
+ try:
+ details_parsed = json.loads(r[6])
+ except Exception:
+ pass
+ 
+ logs.append({
+ "id": r[0],
+ "timestamp": r[1],
+ "profile": r[2],
+ "event_type": r[3],
+ "action": r[4],
+ "status": r[5],
+ "details": details_parsed,
+ "model_used": r[7]
+ })
  return logs
  except Exception as e:
  print(f"️ [Trust Ledger Error]: Failed to fetch logs: {e}")
@@ -128,10 +128,10 @@ def get_audit_summary() -> dict:
  conn.close()
  
  return {
-  "total_events": total_events,
-  "approved": approved_count,
-  "denied": denied_count,
-  "permission_gate_requests": permission_gates,
+ "total_events": total_events,
+ "approved": approved_count,
+ "denied": denied_count,
+ "permission_gate_requests": permission_gates,
  }
  except Exception as e:
  print(f"️ [Trust Ledger Error]: Failed to fetch summary: {e}")

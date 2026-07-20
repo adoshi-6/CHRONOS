@@ -4,8 +4,8 @@ COLOR 0A
 cls
 
 echo ============================================================
-echo  CHRONOS 24/7 BACKGROUND SERVICE LAUNCHER
-echo  Profile Mode: Active Profile Loaded from config.py
+echo CHRONOS 24/7 BACKGROUND SERVICE LAUNCHER
+echo Profile Mode: Active Profile Loaded from config.py
 echo ============================================================
 echo.
 
@@ -14,10 +14,10 @@ cd /d "%~dp0"
 
 :: Check for virtual environment
 if not exist ".venv\Scripts\python.exe" (
-  echo [ERROR] Python virtual environment not found in .venv
-  echo Please run setup or install dependencies before starting service.
-  pause
-  exit /b 1
+ echo [ERROR] Python virtual environment not found in .venv
+ echo Please run setup or install dependencies before starting service.
+ pause
+ exit /b 1
 )
 
 echo [SERVICE]: Starting CHRONOS Server in 24/7 Auto-Restart Loop...

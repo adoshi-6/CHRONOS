@@ -1082,21 +1082,21 @@
  let cleanOutput = (l.output || "").substring(0, 100).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + ((l.output || "").length > 100 ? "..." : "");
  let verdictColor = l.verdict.startsWith("PASS") ? "#34C759" : "#FF453A";
  return `
-  <div style="margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
-  <b>Attempt ${l.attempt}</b> | Worker: <span style="color:#5AC8FA">${l.worker}</span><br>
-  <b>Spec:</b> ${l.spec}<br>
-  <b>Output:</b> <i>${cleanOutput}</i><br>
-  <b>Verdict:</b> <span style="color:${verdictColor}">${l.verdict}</span>
-  </div>
+ <div style="margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+ <b>Attempt ${l.attempt}</b> | Worker: <span style="color:#5AC8FA">${l.worker}</span><br>
+ <b>Spec:</b> ${l.spec}<br>
+ <b>Output:</b> <i>${cleanOutput}</i><br>
+ <b>Verdict:</b> <span style="color:${verdictColor}">${l.verdict}</span>
+ </div>
  `;
  }).join('');
  
  logHtml = `
  <div class="execution-logs" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);">
-  <a href="#" onclick="event.preventDefault(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';" style="font-size: 9px; font-family: monospace; color: var(--accent-glow); text-decoration: none;">[VIEW AGENTIC OS LOGS]</a>
-  <div class="logs-content" style="display: none; font-family: monospace; font-size: 10px; margin-top: 5px; color: rgba(255,255,255,0.6); max-height: 150px; overflow-y: auto;">
-  ${logItems}
-  </div>
+ <a href="#" onclick="event.preventDefault(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';" style="font-size: 9px; font-family: monospace; color: var(--accent-glow); text-decoration: none;">[VIEW AGENTIC OS LOGS]</a>
+ <div class="logs-content" style="display: none; font-family: monospace; font-size: 10px; margin-top: 5px; color: rgba(255,255,255,0.6); max-height: 150px; overflow-y: auto;">
+ ${logItems}
+ </div>
  </div>
  `;
  }

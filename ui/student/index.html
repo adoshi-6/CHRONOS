@@ -134,7 +134,7 @@
  <div class="main-chat">
  <div class="chat-history" id="chatHistory">
  <div class="message tutor-message">
-  Hello! I am your CHRONOS STEM Tutor. What subject or problem are we looking at today?
+ Hello! I am your CHRONOS STEM Tutor. What subject or problem are we looking at today?
  </div>
  </div>
  <div class="input-panel">
@@ -167,9 +167,9 @@
  // Simple API call to backend
  try {
  const response = await fetch('/api/command', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ command: text })
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ command: text })
  });
  const data = await response.json();
  
