@@ -2,12 +2,24 @@
 .env
 *.env
 secrets.toml
+api_key.txt
 
-# Security files — PIN hash and code word config
+# Security files — PIN hash and security keys
 CHRONOS_SECURITY/
+chronos_security/
 
 # Self-learning memory — personal data
 CHRONOS_MEMORY/
+chronos_memory/
+
+# Private B2B Databases & Exports
+*.db
+invoices/
+revenue_squad_data/
+cad_exports/
+screenshots/
+notion_*.txt
+notion_*.json
 
 # Conversation history — personal data
 conversation_history.json

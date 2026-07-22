@@ -28,11 +28,84 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from playwright.sync_api import sync_playwright
 from audio_provider import speak_text, is_speaking
 
-# ── GPU Server Connection ─────────────────────────────────────────────────────
-# Point this at your Ollama server's Tailscale IP.
-# Change the IP below to match your server — find it with `tailscale ip` on the server.
-# Leave as localhost if running Ollama on this same machine.
-OLLAMA_SERVER_URL = "http://100.88.1.86:11434"
+# ── Trust Ledger & Security Infrastructure Imports ────────────────────────────
+try:
+    from trust_ledger import log_event, get_recent_logs, get_audit_summary
+except ImportError:
+    def log_event(*args, **kwargs): pass
+    def get_recent_logs(*args, **kwargs): return []
+    def get_audit_summary(*args, **kwargs): return {}
+
+try:
+    import trust_escalation
+    import agent_shield
+    import memory_distillation
+    import health_check
+    import clarity_gate
+    import file_lock
+    import skills_loader
+    import file_dispatcher
+    import gen_ui_cards
+    import invoice_engine
+    import portal_automator
+    import calendar_sync
+    import crm_timeline
+    import workflow_engine
+    import twilio_calling
+    import ai_tools_memory
+    import revenue_squad
+    import katex_math
+    import physics_sim
+    import cad_engine
+    import chem_3d
+    import debugger_vis
+    import security_hardening
+except ImportError as e:
+    print(f"⚠️ [Phase 1, 2 & 3 Import Warning]: {e}")
+
+PENDING_GATE_REQUESTS = {}
+gate_request_counter = 0
+
+# ── Load Dotenv ───────────────────────────────────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# ── Profiles Loading ─────────────────────────────────────────────────────────
+ACTIVE_PROFILE = "personal"
+try:
+    import config
+    ACTIVE_PROFILE = getattr(config, "ACTIVE_PROFILE", "personal")
+except ImportError:
+    pass
+
+PROFILE_SETTINGS = {}
+_profile_path = os.path.join(os.path.dirname(__file__), "profiles", f"{ACTIVE_PROFILE}.json")
+if os.path.exists(_profile_path):
+    try:
+        with open(_profile_path, "r", encoding="utf-8") as f:
+            PROFILE_SETTINGS = json.load(f)
+        print(f"👤 [Profile Loaded]: Active Profile is '{ACTIVE_PROFILE}'")
+    except Exception as e:
+        print(f"⚠️ [Profile Load Error]: Failed to load '{_profile_path}': {e}")
+else:
+    print(f"⚠️ [Profile Warning]: Profiles directory or '{ACTIVE_PROFILE}.json' not found. Using defaults.")
+
+# Extract profile configurations
+ASSISTANT_NAME = PROFILE_SETTINGS.get("assistant_name", "CHRONOS")
+USER_NAME = PROFILE_SETTINGS.get("user_name", "Aryan")
+FAST_MODEL = PROFILE_SETTINGS.get("fast_model", "qwen3:4b")
+SMART_MODEL = PROFILE_SETTINGS.get("smart_model", "deepseek-r1:14b")
+VOICE_TAG = PROFILE_SETTINGS.get("voice_tag", "en-GB-RyanNeural")
+API_PROVIDER = PROFILE_SETTINGS.get("api_provider", "ollama")
+ENABLE_MORNING_EXECUTIVE_BRIEFING = PROFILE_SETTINGS.get("enable_morning_executive_briefing", False)
+LEAN_BUSINESS_MODE = PROFILE_SETTINGS.get("lean_business_mode", False)
+ALLOWED_TOOL_CATEGORIES = PROFILE_SETTINGS.get("allowed_tool_categories", [])
+
+# Configure Ollama Client
+OLLAMA_SERVER_URL = PROFILE_SETTINGS.get("ollama_server_url", "http://100.88.1.86:11434")
 client = ollama.Client(host=OLLAMA_SERVER_URL)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -49,9 +122,9 @@ app = Flask(__name__)
 # To point at a different server: change OLLAMA_SERVER_URL below.
 # ============================================================
 
-FAST_MODEL   = "qwen3:4b"
-SMART_MODEL  = "deepseek-r1:14b"
-CODING_MODEL = "qwen2.5-coder:14b"   # Re-enabled — runs on GPU server
+FAST_MODEL   = PROFILE_SETTINGS.get("fast_model", "qwen3:4b")
+SMART_MODEL  = PROFILE_SETTINGS.get("smart_model", "deepseek-r1:14b")
+CODING_MODEL = PROFILE_SETTINGS.get("coding_model", "qwen2.5-coder:14b")
 
 # ============================================================
 # DESKTOP CONFIG — Aryan's desktop path
@@ -404,39 +477,102 @@ def stream_and_speak_sentences(messages: list, model: str, speak: bool = False) 
     return "".join(full_response)
 
 
+def compress_prompt(prompt: str) -> str:
+    """
+    Removes redundant spaces, newlines, and collapses formatting to reduce tokens (for business/student profiles).
+    """
+    if not prompt:
+        return ""
+    # Collapse multiple newlines/spaces
+    prompt = re.sub(r'\n+', '\n', prompt)
+    prompt = re.sub(r' +', ' ', prompt)
+    return prompt.strip()
+
+
 def ollama_call_streaming(model: str, system: str, user: str, speak: bool = False) -> str:
     """
     Wrapper for streaming system prompts and user inputs dynamically.
+    Routes to Ollama streaming or cloud block synthesis.
     """
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user",   "content": user},
-    ]
-    return stream_and_speak_sentences(messages, model, speak)
+    # Apply token compression (business & student modes)
+    if PROFILE_SETTINGS.get("token_compression"):
+        system = compress_prompt(system)
+        user = compress_prompt(user)
+
+    if API_PROVIDER == "ollama":
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ]
+        return stream_and_speak_sentences(messages, model, speak)
+    else:
+        # Fallback to direct call block since Cloud API latency is low
+        res = ollama_call(model, system, user)
+        if speak and res.strip():
+            execute_audio_playback(res)
+        return res
 
 
 def ollama_call(model: str, system: str, user: str) -> str:
     """
-    Single Ollama call with consistent error handling.
-    Returns a plain string — never raises.
+    Single call with consistent error handling.
+    Routes to local Ollama or Cloud Gemini API dynamically.
     """
-    try:
-        res = client.chat(model=model, messages=[
-            {"role": "system", "content": system},
-            {"role": "user",   "content": user},
-        ])
-        return strip_think(res['message']['content'])
-    except Exception as e:
-        return f"[Agent error: {e}]"
+    # Rate limit safe mode throttling for free tier (student mode)
+    if PROFILE_SETTINGS.get("rate_limit_safe_mode"):
+        time.sleep(1.5)  # Max 15 RPM / 2 RPM limit protection
+
+    # Apply token compression (business & student modes)
+    if PROFILE_SETTINGS.get("token_compression"):
+        system = compress_prompt(system)
+        user = compress_prompt(user)
+
+    if API_PROVIDER == "ollama":
+        try:
+            res = client.chat(model=model, messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ])
+            return strip_think(res['message']['content'])
+        except Exception as e:
+            return f"[Agent error: {e}]"
+            
+    elif API_PROVIDER == "gemini_cloud":
+        try:
+            from google import genai
+            from google.genai import types
+            
+            gemini_model = model
+            if "qwen3" in model or "flash" in model:
+                gemini_model = "gemini-1.5-flash"
+            elif "deepseek" in model or "pro" in model:
+                gemini_model = "gemini-1.5-pro"
+                
+            g_client = genai.Client()
+            config = types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=1024,
+            )
+            response = g_client.models.generate_content(
+                model=gemini_model,
+                contents=user,
+                config=config
+            )
+            return strip_think(response.text)
+        except Exception as e:
+            return f"[Cloud API error: {e}]"
+            
+    return "[Unknown API Provider]"
 
 
 def ollama_call_coding(system: str, user: str) -> str:
     """
-    Coding-specific call with automatic load and unload.
-    keep_alive=0 tells Ollama to evict the model from RAM/VRAM the
-    moment generation finishes — it only lives in memory while actively
-    generating code, never sitting idle between coding sessions.
+    Coding-specific call. Automatically unloads if local Ollama,
+    or forwards directly to the cloud model if API provider.
     """
+    if API_PROVIDER == "gemini_cloud":
+        return ollama_call(SMART_MODEL, system, user)
+
     try:
         print(f"[Coding Model]: Loading {CODING_MODEL} into memory...")
         res = client.chat(
@@ -455,7 +591,7 @@ def ollama_call_coding(system: str, user: str) -> str:
         return f"[Coding agent error: {e}]"
 
 
-def _run_audio(text: str):
+def _run_audio(text: str, voice: str = "standard"):
     """Speak text in a background thread — never blocks Flask."""
     try:
         try:
@@ -463,16 +599,16 @@ def _run_audio(text: str):
             pythoncom.CoInitialize()
         except ImportError:
             pass
-        speak_text(text)
+        speak_text(text, voice)
     except Exception as e:
         print(f"❌ [Audio Engine]: {e}")
 
 
-def execute_audio_playback(text: str):
+def execute_audio_playback(text: str, voice: str = "standard"):
     """Fire-and-forget TTS — returns immediately."""
     import audio_provider
     audio_provider.is_currently_speaking = True
-    threading.Thread(target=_run_audio, args=(text,), daemon=True).start()
+    threading.Thread(target=_run_audio, args=(text, voice), daemon=True).start()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -880,7 +1016,8 @@ with open(_council_config_path, "r", encoding="utf-8") as f:
     _council_data = json.load(f)
 
 # The first 6 are workers, the last is the chairman
-COUNCIL_AGENTS = {k: v for k, v in _council_data.items() if k != "chairman"}
+DEBATE_SEATS = ["contrarian", "first_principles", "expansionist", "outsider", "executor", "rainmaker"]
+COUNCIL_AGENTS = {k: v for k, v in _council_data.items() if k in DEBATE_SEATS}
 CHAIRMAN_SYSTEM = _council_data.get("chairman", {}).get("system", "")
 
 
@@ -939,16 +1076,142 @@ def run_parallel_council(idea: str) -> dict:
     return results
 
 
+def run_execution_loop(task: str) -> dict:
+    """
+    Step 2: Core Execution Loop (Conductor/Worker/Verifier)
+    Executes a task through planning, execution, and verification phases.
+    Iterates up to 3 times to get a verified result.
+    """
+    print(f"\n⚡ [Execution Loop]: Starting loop for task: '{task}'")
+    
+    cond_cfg = _council_data.get("conductor", {})
+    ver_cfg = _council_data.get("verifier", {})
+    
+    # 1. CONDUCTOR Plan
+    cond_sys = cond_cfg.get("system", "")
+    cond_prompt = cond_cfg.get("prompt", "").format(task=task)
+    
+    plan_json = {}
+    try:
+        raw_plan = ollama_call(SMART_MODEL, cond_sys, cond_prompt)
+        # Parse JSON from model output
+        clean_plan = re.sub(r'```[a-z]*\n?([\s\S]*?)```', r'\1', raw_plan).strip()
+        # Find outer JSON block if there is extra conversational text
+        json_match = re.search(r'\{[\s\S]*\}', clean_plan)
+        if json_match:
+            clean_plan = json_match.group(0)
+        plan_json = json.loads(clean_plan)
+    except Exception as e:
+        print(f"❌ [Conductor Planning Error]: {e}. Raw response: {raw_plan if 'raw_plan' in locals() else 'N/A'}")
+        return {"status": "error", "error": f"Conductor planning failed: {e}", "logs": []}
+
+    worker = plan_json.get("worker", "conversational")
+    spec = plan_json.get("spec", "")
+    done_when = plan_json.get("done_when", [])
+    
+    print(f"📋 [Conductor Plan]: Specialist: {worker} | Spec: '{spec}' | Done When: {done_when}")
+    
+    loop_logs = []
+    current_feedback = ""
+    success = False
+    final_output = ""
+    
+    # Iterate up to 3 times
+    for attempt in range(1, 4):
+        print(f"🔄 [Execution Attempt {attempt}/3]: Running Specialist Worker '{worker}'")
+        
+        # 2. WORKER executes
+        worker_output = ""
+        try:
+            if worker == "browser":
+                # Prepend previous feedback if we are retrying
+                full_spec = spec
+                if current_feedback:
+                    full_spec += f" (Note: previous search failed verification: {current_feedback})"
+                worker_output = execute_browser_harness(full_spec)
+            elif worker == "desktop":
+                full_spec = spec
+                if current_feedback:
+                    full_spec += f"\nNote: Previous attempt failed verification. Feedback: {current_feedback}"
+                worker_output = handle_desktop_command(full_spec)
+            elif worker == "coding":
+                coding_system = (
+                    "You are CHRONOS's software engineering agent. No emojis. No filler. "
+                    "Address the user as 'sir' naturally. "
+                    "Provide clean, working code. "
+                )
+                if current_feedback:
+                    coding_system += f"\nPrevious attempt failed verification. Feedback: {current_feedback}"
+                worker_output = ollama_call_coding(coding_system, spec)
+            else:
+                # General text specialist worker (mathematician, sales, support)
+                worker_prompt = f"Perform this task: {spec}"
+                if current_feedback:
+                    worker_prompt += f"\nNote: Previous attempt failed. Verifier feedback: {current_feedback}. Adjust your answer accordingly."
+                
+                worker_sys = "You are a specialist worker on CHRONOS's council. Be precise and direct."
+                # Check if there is a custom agent prompt matching the worker name
+                if worker in _council_data:
+                    worker_sys = _council_data[worker].get("system", worker_sys)
+                    
+                worker_output = ollama_call(SMART_MODEL, worker_sys, worker_prompt)
+        except Exception as e:
+            worker_output = f"Worker execution error: {e}"
+            print(f"❌ [Worker Error]: {e}")
+            
+        print(f"📥 [Worker Output]: {worker_output[:120]}...")
+        
+        # 3. VERIFIER checks output
+        ver_sys = ver_cfg.get("system", "")
+        ver_prompt = ver_cfg.get("prompt", "").format(
+            spec=spec,
+            done_when=json.dumps(done_when),
+            output=worker_output
+        )
+        
+        verdict = ""
+        try:
+            verdict = ollama_call(SMART_MODEL, ver_sys, ver_prompt).strip()
+        except Exception as e:
+            verdict = f"FAIL: Verifier error: {e}"
+            
+        print(f"🧐 [Verifier Verdict]: {verdict}")
+        
+        loop_logs.append({
+            "attempt": attempt,
+            "worker": worker,
+            "spec": spec,
+            "output": worker_output,
+            "verdict": verdict
+        })
+        
+        if verdict.startswith("PASS"):
+            success = True
+            final_output = worker_output
+            break
+        else:
+            current_feedback = verdict.replace("FAIL:", "").strip()
+            final_output = worker_output
+            
+    return {
+        "status": "success" if success else "failed",
+        "worker": worker,
+        "spec": spec,
+        "done_when": done_when,
+        "output": final_output,
+        "logs": loop_logs
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # BROWSER HARNESS — internet access
 # ─────────────────────────────────────────────────────────────
 
 def execute_browser_harness(user_query: str) -> str:
     """
-    Uses Playwright to scrape a DuckDuckGo search for live web context.
-    Falls back gracefully if the browser can't connect.
+    Uses Crawl4AI to scrape a Bing search for live web context in clean Markdown.
     """
-    print(f"🌐 [Browser Harness]: Query: '{user_query}'")
+    print(f"🌐 [Crawl4AI Browser]: Query: '{user_query}'")
 
     # Ask the fast model to extract clean search terms
     try:
@@ -967,28 +1230,34 @@ def execute_browser_harness(user_query: str) -> str:
         else f"https://www.bing.com/search?q={target_search.replace(' ', '+')}"
     )
 
+    print(f"🛰️  Crawling -> {target_url}")
+    
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 720}
-            )
-            page    = context.new_page()
-            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            print(f"🛰️  Navigating -> {target_url}")
-            page.goto(target_url, timeout=BROWSER_TIMEOUT * 1000)
-            page.wait_for_load_state("networkidle")
-            raw_text    = page.inner_text("body")
-            clean_lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
-            # Take first 60 lines — more context for better synthesis
-            scraped     = " ".join(clean_lines[:60])
-            browser.close()
-            print("✅ [Browser]: Context extracted.")
-            return scraped
+        import asyncio
+        from crawl4ai import AsyncWebCrawler
+        
+        async def _crawl(url):
+            async with AsyncWebCrawler() as crawler:
+                result = await crawler.arun(url=url)
+                return result.markdown
+
+        # Safely run the async crawl in Flask's sync context
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        markdown_data = loop.run_until_complete(_crawl(target_url))
+        
+        # Take the first 3000 chars to avoid model context overflow
+        scraped = markdown_data[:3000]
+        print("✅ [Crawl4AI]: Markdown context extracted successfully.")
+        return scraped
+        
     except Exception as e:
-        print(f"❌ [Browser Failure]: {e}")
-        return f"Browser unavailable: {e}"
+        print(f"❌ [Crawl4AI Failure]: {e}")
+        return f"Browser crawl unavailable: {e}"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1228,7 +1497,10 @@ def health_check():
 @app.route('/')
 def serve_dashboard_console():
     try:
-        with open('index.html', 'r', encoding='utf-8') as f:
+        filepath = os.path.join('ui', ACTIVE_PROFILE, 'index.html')
+        if not os.path.exists(filepath):
+            filepath = 'index.html'
+        with open(filepath, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
         return f"Dashboard load failure: {e}"
@@ -1247,9 +1519,88 @@ def serve_local_three_js():
 def handle_isolated_playback():
     data = request.get_json() or {}
     text = data.get('text', '').strip()
+    voice = data.get('voice', 'standard').strip()
     if text:
-        execute_audio_playback(text)
+        execute_audio_playback(text, voice)
     return jsonify({"status": "vocalization_complete"})
+
+
+# ── Trust Ledger & Permission Gate Endpoints ─────────────────────────────────
+@app.route('/api/trust_ledger', methods=['GET'])
+def get_trust_ledger_data():
+    limit = request.args.get('limit', default=50, type=int)
+    profile = request.args.get('profile', default=None, type=str)
+    logs = get_recent_logs(limit=limit, profile=profile)
+    summary = get_audit_summary()
+    return jsonify({"summary": summary, "logs": logs})
+
+
+@app.route('/api/health', methods=['GET'])
+def get_system_health():
+    try:
+        report = health_check.run_system_health_check()
+    except Exception as e:
+        report = {"status": "error", "message": str(e)}
+    return jsonify(report)
+
+
+@app.route('/api/learned_rules', methods=['GET', 'POST'])
+def handle_learned_rules():
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        rule_text = data.get("rule_text", "").strip()
+        category = data.get("category", "general")
+        if not rule_text:
+            return jsonify({"error": "rule_text required"}), 400
+        res = memory_distillation.add_learned_rule(rule_text, category=category)
+        return jsonify(res)
+    else:
+        rules = memory_distillation.get_relevant_learned_rules()
+        return jsonify({"rules": rules})
+
+
+@app.route('/api/permission_gate/pending', methods=['GET'])
+def get_pending_permission_requests():
+    return jsonify({"pending_requests": list(PENDING_GATE_REQUESTS.values())})
+
+
+@app.route('/api/permission_gate/respond', methods=['POST'])
+def respond_permission_request():
+    data = request.get_json() or {}
+    req_id = data.get("request_id")
+    decision = data.get("decision", "").lower().strip()
+    
+    if req_id in PENDING_GATE_REQUESTS:
+        gate_req = PENDING_GATE_REQUESTS.pop(req_id)
+        action_name = gate_req.get("action", "unknown")
+        
+        status_str = "APPROVED" if decision == "approve" else "DENIED"
+        log_event("PERMISSION_GATE", action_name, status_str, {"decision": decision, "request_id": req_id}, ACTIVE_PROFILE)
+        return jsonify({"status": status_str, "request_id": req_id})
+        
+    return jsonify({"error": "Request ID not found or already processed"}), 404
+
+
+# ── CRM API Endpoints ────────────────────────────────────────────────────────
+@app.route('/api/crm/leads', methods=['GET'])
+def get_crm_leads_data():
+    try:
+        from crm_engine import get_leads
+        status_filter = request.args.get('status', default=None, type=str)
+        leads = get_leads(status_filter)
+        return jsonify({"leads": leads})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/crm/appointments', methods=['GET'])
+def get_crm_appointments_data():
+    try:
+        from crm_engine import get_upcoming_appointments
+        appointments = get_upcoming_appointments()
+        return jsonify({"appointments": appointments})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/command', methods=['POST'])
@@ -1267,6 +1618,7 @@ def orchestrate_command_routing():
 
     interaction_session_counter += 1
     print(f"\n📥 [{source.upper()}] #{interaction_session_counter}: \"{command}\"")
+    log_event("USER_COMMAND", command, "RECEIVED", {"source": source}, ACTIVE_PROFILE)
     lower_cmd      = command.lower()
     context_string = f"{len(chat_history)}/20 SLOTS"
 
@@ -1517,13 +1869,11 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "browser":
         print(f"🌐 [Hermes]: Browser harness active...")
-        web_context = execute_browser_harness(command)
+        # Run through execution loop to verify web search
+        loop_res = run_execution_loop(command)
+        web_context = loop_res.get("output", "")
         synthesis_system = (
             "You are CHRONOS, a personal AI assistant. Always address Aryan as 'sir'. Use impeccable grammar, spelling, capitalization, and punctuation in your responses. with live web access. "
-            "No emojis. No filler. Address the user as 'sir'. "
-            "Summarize key facts from web data to answer directly. "
-            "2 to 4 sentences. Skip ads and nav text. "
-            "If data does not contain an answer, say so plainly."
             "Never use emojis. Never start with filler phrases like Certainly or Great question. "
             "Summarize the most relevant facts from the web data to answer Aryan's question directly. "
             "2 to 4 sentences max. Skip navigation text and ads. "
@@ -1535,7 +1885,16 @@ def orchestrate_command_routing():
                 f"Aryan asked: {command}\n\nLive web data:\n{web_context}",
                 speak=(source == 'voice' and CHRONOS_MODE != "stealth")
             )
-            return respond(reply, rtype="browser", model="hermes-browser", speak=False)
+            return jsonify({
+                "response":          reply,
+                "type":              "browser",
+                "model":             "hermes-browser",
+                "CHRONOS_MODE":      CHRONOS_MODE,
+                "interaction_count": interaction_session_counter,
+                "context_loaded":    context_string,
+                "execution_time":    round(time.time() - start_time, 2),
+                "logs":              loop_res.get("logs", [])
+            })
         except Exception as e:
             return respond(f"Browser synthesis failed: {e}", rtype="browser")
 
@@ -1572,8 +1931,20 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "desktop":
         print(f"🖥️  [Hermes]: Desktop agent active...")
-        result = handle_desktop_command(command)
-        return respond(result, rtype="desktop", model="desktop-agent", speak=True)
+        loop_res = run_execution_loop(command)
+        result = loop_res.get("output", "")
+        if source == 'voice' and CHRONOS_MODE != "stealth":
+            execute_audio_playback(result)
+        return jsonify({
+            "response":          result,
+            "type":              "desktop",
+            "model":             "desktop-agent",
+            "CHRONOS_MODE":      CHRONOS_MODE,
+            "interaction_count": interaction_session_counter,
+            "context_loaded":    context_string,
+            "execution_time":    round(time.time() - start_time, 2),
+            "logs":              loop_res.get("logs", [])
+        })
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE D2 — CODING AGENT (disabled — no model loaded)
@@ -1581,15 +1952,20 @@ def orchestrate_command_routing():
     # ══════════════════════════════════════════════════════════════════════
     elif route == "coding":
         print(f"[Hermes]: Coding agent requested -> {CODING_MODEL}")
-        coding_system = (
-            "You are CHRONOS's software engineering agent. No emojis. No filler. "
-            "Address the user as 'sir' naturally. "
-            "Provide clean, working code with the shortest necessary explanation. "
-            "If fixing something, state what was wrong in one sentence first."
-        )
-        if source == 'voice':
+        loop_res = run_execution_loop(command)
+        result = loop_res.get("output", "")
+        if source == 'voice' and CHRONOS_MODE != "stealth":
             execute_audio_playback("Code compiled. Dropping it into your viewport now.")
-        return respond(reply, rtype="coding", model=CODING_MODEL)
+        return jsonify({
+            "response":          result,
+            "type":              "coding",
+            "model":             CODING_MODEL,
+            "CHRONOS_MODE":      CHRONOS_MODE,
+            "interaction_count": interaction_session_counter,
+            "context_loaded":    context_string,
+            "execution_time":    round(time.time() - start_time, 2),
+            "logs":              loop_res.get("logs", [])
+        })
 
     # ══════════════════════════════════════════════════════════════════════
     # CASE E — SESSION END ("wrap it up", "end session", etc.)
@@ -1727,6 +2103,259 @@ def orchestrate_command_routing():
             return respond(reply, speak=False)
         except Exception as e:
             return respond(f"Conversation pipeline dropped: {e}")
+
+
+@app.route('/api/skills', methods=['GET'])
+def get_skills_api():
+    """Returns all registered skills plugins."""
+    try:
+        skills = skills_loader.skills_manager.list_skills()
+        return jsonify({"status": "success", "skills": skills})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/upload', methods=['POST'])
+def handle_file_upload_api():
+    """Handles multi-format file uploads and parses content via file_dispatcher."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No file stream provided"}), 400
+        
+        uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({"status": "error", "message": "Empty file name"}), 400
+
+        uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        save_path = os.path.join(uploads_dir, uploaded_file.filename)
+        uploaded_file.save(save_path)
+
+        parsed_data = file_dispatcher.file_dispatcher.parse_file(save_path)
+        return jsonify({"status": "success", "parsed": parsed_data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/invoice', methods=['POST'])
+def generate_invoice_api():
+    """Generates an HTML/PDF invoice."""
+    try:
+        data = request.json or {}
+        res = invoice_engine.invoice_engine.generate_invoice(data)
+        card_html = gen_ui_cards.ui_cards.render_invoice_card(res)
+        return jsonify({"status": "success", "invoice": res, "card_html": card_html})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/calendar', methods=['GET', 'POST'])
+def handle_calendar_api():
+    """Lists or creates calendar appointments."""
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            res = calendar_sync.calendar_engine.create_appointment(
+                title=data.get("title", "Consultation"),
+                start_time=data.get("start_time", "Tomorrow at 3 PM"),
+                client_name=data.get("client_name", "Client"),
+                client_email=data.get("client_email", ""),
+                notes=data.get("notes", "")
+            )
+            card_html = gen_ui_cards.ui_cards.render_appointment_card(res)
+            return jsonify({"status": "success", "appointment": res, "card_html": card_html})
+        else:
+            appts = calendar_sync.calendar_engine.list_appointments()
+            return jsonify({"status": "success", "appointments": appts})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/timeline', methods=['GET'])
+def get_timeline_api():
+    """Fetches CRM touchpoints and visual SVG graph for a client."""
+    try:
+        client_name = request.args.get("client", "Sarah Jenkins")
+        history = crm_timeline.crm_timeline.get_history(client_name)
+        svg_graph = crm_timeline.crm_timeline.render_timeline_svg(client_name)
+        return jsonify({"status": "success", "client": client_name, "history": history, "svg": svg_graph})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/contacts', methods=['GET', 'POST'])
+def handle_contacts_api():
+    """Manages business contacts and triggers SMS/Calls."""
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            action = data.get("action", "add")
+            if action == "sms":
+                res = twilio_calling.twilio_engine.send_sms(data.get("phone"), data.get("message", "Hello from CHRONOS"))
+            elif action == "call":
+                res = twilio_calling.twilio_engine.make_call(data.get("phone"), data.get("script", "Hello from CHRONOS"))
+            else:
+                res = twilio_calling.twilio_engine.add_contact(
+                    name=data.get("name"), phone=data.get("phone"),
+                    email=data.get("email", ""), company=data.get("company", ""), tags=data.get("tags", "")
+                )
+            return jsonify({"status": "success", "result": res})
+        else:
+            contacts = twilio_calling.twilio_engine.list_contacts()
+            return jsonify({"status": "success", "contacts": contacts})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/ai_tools', methods=['GET', 'POST'])
+def handle_ai_tools_api():
+    """Searches or adds tools to CHRONOS AI Tools Memory Catalog."""
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            res = ai_tools_memory.ai_tools_memory.add_tool(
+                name=data.get("name"),
+                category=data.get("category", "General AI"),
+                description=data.get("description", ""),
+                use_case=data.get("use_case", ""),
+                pricing=data.get("pricing", "Free"),
+                url=data.get("url", "")
+            )
+            return jsonify({"status": "success", "result": res})
+        else:
+            query = request.args.get("query", "")
+            tools = ai_tools_memory.ai_tools_memory.search_tools(query)
+            return jsonify({"status": "success", "query": query, "count": len(tools), "tools": tools})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/squad', methods=['GET', 'POST'])
+def handle_revenue_squad_api():
+    """Manages the 9 B2B Revenue Squad agents and Human Approval Gate queue."""
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            action = data.get("action", "research")
+            if action == "research":
+                res = revenue_squad.revenue_squad.run_researcher(data.get("company", "Target Account"))
+            elif action == "outreach":
+                res = revenue_squad.revenue_squad.run_outreacher(data.get("name", "Prospect"), data.get("company", "Target Co"))
+            elif action == "qualify":
+                res = revenue_squad.revenue_squad.run_qualifier(data)
+            elif action == "onboard":
+                res = revenue_squad.revenue_squad.run_onboarder(data.get("company", "New Client"))
+            elif action == "intel":
+                res = revenue_squad.revenue_squad.run_intel(data.get("competitor", "Competitor"))
+            elif action == "proposal":
+                res = revenue_squad.revenue_squad.run_proposal_writer(data.get("company", "Client"))
+            else:
+                res = {"error": f"Unknown squad action '{action}'"}
+            return jsonify({"status": "success", "result": res})
+        else:
+            squad_manifest = revenue_squad.revenue_squad.list_squad_status()
+            approval_queue = revenue_squad.revenue_squad.get_approval_queue()
+            return jsonify({
+                "status": "success",
+                "agents_count": len(squad_manifest),
+                "agents": squad_manifest,
+                "pending_human_approvals": len(approval_queue),
+                "approval_queue": approval_queue
+            })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/math', methods=['POST'])
+def handle_math_api():
+    """Solves symbolic math, differentiation, integration, and produces KaTeX LaTeX."""
+    try:
+        data = request.json or {}
+        operation = data.get("operation", "simplify") # "diff", "integrate", "solve", "simplify"
+        expr = data.get("expression", "x**2 + 2*x + 1")
+        var = data.get("var", "x")
+
+        if operation == "diff":
+            res = katex_math.math_engine.differentiate(expr, var)
+        elif operation == "integrate":
+            res = katex_math.math_engine.integrate_expr(expr, var, lower=data.get("lower"), upper=data.get("upper"))
+        else:
+            res = katex_math.math_engine.solve_expression(expr, var)
+
+        return jsonify({"status": "success", "result": res})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/stem/physics', methods=['POST'])
+def handle_stem_physics_api():
+    """Renders 3D/2D physics simulation widgets."""
+    try:
+        data = request.json or {}
+        sim_type = data.get("type", "projectile")
+        widget_html = physics_sim.physics_sim.render_sim(sim_type, data.get("params"))
+        return jsonify({"status": "success", "sim_type": sim_type, "widget_html": widget_html})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/stem/cad', methods=['POST'])
+def handle_stem_cad_api():
+    """Generates OpenSCAD parametric code or 2D DXF wireframes."""
+    try:
+        data = request.json or {}
+        cad_type = data.get("type", "scad")
+        part_name = data.get("part_name", "part_01")
+        if cad_type == "dxf":
+            res = cad_engine.cad_engine.generate_dxf_wireframe(part_name, data.get("width", 100.0), data.get("height", 60.0))
+        else:
+            res = cad_engine.cad_engine.generate_scad_model(part_name, data.get("length", 50), data.get("width", 30), data.get("height", 15))
+        return jsonify({"status": "success", "result": res})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/stem/chem', methods=['POST'])
+def handle_stem_chem_api():
+    """Renders 3D WebGL molecular visualizer widgets."""
+    try:
+        data = request.json or {}
+        molecule = data.get("molecule", "caffeine")
+        widget_html = chem_3d.chem_3d.render_molecule_widget(molecule)
+        return jsonify({"status": "success", "molecule": molecule, "widget_html": widget_html})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/stem/debugger', methods=['POST'])
+def handle_stem_debugger_api():
+    """Renders C/C++ memory pointer maps and linked list diagrams."""
+    try:
+        data = request.json or {}
+        vis_type = data.get("type", "pointers")
+        if vis_type == "linked_list":
+            widget_html = debugger_vis.debugger_vis.render_linked_list(data.get("nodes"))
+        else:
+            widget_html = debugger_vis.debugger_vis.render_pointer_memory_map(data.get("variables"))
+        return jsonify({"status": "success", "type": vis_type, "widget_html": widget_html})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/security/verify', methods=['GET', 'POST'])
+def handle_security_verify_api():
+    """Verifies API Key security authorization and returns 100% offline status."""
+    try:
+        is_valid, msg = security_hardening.security_engine.verify_request_key(request.headers, request.args)
+        offline_info = security_hardening.security_engine.check_offline_readiness()
+        return jsonify({
+            "status": "success" if is_valid else "unauthorized",
+            "authorized": is_valid,
+            "message": msg,
+            "offline_readiness": offline_info
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 if __name__ == '__main__':
